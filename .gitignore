@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Assets (if you want to exclude large files from git)
+# assets/models/*.obj
+# assets/models/*.fbx
+# assets/textures/*.psd
+# assets/sounds/*.wav
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Lock files for package managers
+package-lock.json
+yarn.lock
+
+# Three.js and other large libraries (if not using CDN)
+js/libs/

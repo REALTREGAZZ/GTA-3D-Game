@@ -1,0 +1,33 @@
+{
+  "name": "gta5-style-3d-game",
+  "version": "0.1.0",
+  "description": "Videojuego 3D estilo GTA 5 desarrollado con Three.js",
+  "main": "js/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "http-server -p 8000 -c-1 --cors",
+    "start": "http-server -p 8000 -c-1",
+    "build": "echo 'Build process not configured yet'",
+    "lint": "echo 'Linting not configured yet'",
+    "format": "echo 'Formatting not configured yet'"
+  },
+  "keywords": [
+    "3d",
+    "game",
+    "gta",
+    "threejs",
+    "javascript",
+    "webgl"
+  ],
+  "author": "Game Development Team",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

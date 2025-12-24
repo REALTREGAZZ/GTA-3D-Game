@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="description" content="Videojuego 3D estilo GTA 5">
+    <meta name="keywords" content="3d, game, gta, three.js, javascript">
+    <meta name="author" content="Game Development Team">
+    <title>GTA 5 Style 3D Game</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- HUD - Heads Up Display -->
+    <div id="hud">
+        <!-- Health Bar -->
+        <div class="hud-section health-section">
+            <div class="label">SALUD</div>
+            <div class="bar-container">
+                <div class="bar health-bar" id="healthBar"></div>
+            </div>
+            <div class="value" id="healthValue">100</div>
+        </div>
+        
+        <!-- Armor Bar -->
+        <div class="hud-section armor-section">
+            <div class="label">ARMADURA</div>
+            <div class="bar-container">
+                <div class="bar armor-bar" id="armorBar"></div>
+            </div>
+            <div class="value" id="armorValue">50</div>
+        </div>
+        
+        <!-- Money Display -->
+        <div class="hud-section money-section">
+            <div class="money-display">
+                <span class="money-symbol">$</span>
+                <span class="money-value" id="moneyValue">0</span>
+            </div>
+        </div>
+        
+        <!-- Current Mission -->
+        <div class="hud-section mission-section">
+            <div class="mission-label">MISIÓN ACTUAL</div>
+            <div class="mission-name" id="missionName">Bienvenido a la ciudad</div>
+        </div>
+        
+        <!-- Minimap Placeholder -->
+        <div class="hud-section minimap-section">
+            <div class="minimap" id="minimap">
+                <div class="player-marker"></div>
+            </div>
+        </div>
+        
+        <!-- Weapon/Items Info -->
+        <div class="hud-section weapon-section">
+            <div class="weapon-info" id="weaponInfo">
+                <div class="weapon-name">Puños</div>
+                <div class="ammo-count">∞</div>
+            </div>
+        </div>
+        
+        <!-- Game Time -->
+        <div class="hud-section time-section">
+            <div class="game-time" id="gameTime">12:00</div>
+        </div>
+    </div>
+    
+    <!-- Pause Menu -->
+    <div id="pauseMenu" class="menu-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title">PAUSA</h1>
+            <nav class="menu-nav">
+                <button class="menu-button" id="resumeBtn">Continuar</button>
+                <button class="menu-button" id="settingsBtn">Opciones</button>
+                <button class="menu-button" id="saveBtn">Guardar Partida</button>
+                <button class="menu-button" id="loadBtn">Cargar Partida</button>
+                <button class="menu-button" id="exitBtn">Salir al Menú Principal</button>
+            </nav>
+        </div>
+    </div>
+    
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loading-content">
+            <h1 class="game-title">GTA 5 STYLE 3D</h1>
+            <div class="loading-bar-container">
+                <div class="loading-bar" id="loadingBar"></div>
+            </div>
+            <div class="loading-text" id="loadingText">Cargando recursos...</div>
+        </div>
+    </div>
+    
+    <!-- Modular JavaScript Loading -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
