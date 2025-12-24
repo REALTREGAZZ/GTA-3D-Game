@@ -5,6 +5,11 @@
 
 import { GAME_CONFIG, DEBUG_CONFIG } from './config.js';
 
+import { createWorld } from './world.js';
+import { createTerrain } from './terrain.js';
+import { createBuildings } from './buildings.js';
+import { createSky } from './sky.js';
+
 // ============================================
 // GAME STATE
 // ============================================
@@ -32,6 +37,14 @@ const GameState = {
 };
 
 // ============================================
+// THREE.JS WORLD STATE
+// ============================================
+let World3D = null;
+let Terrain = null;
+let Buildings = null;
+let Sky = null;
+
+// ============================================
 // DOM ELEMENTS
 // ============================================
 const UI = {
@@ -56,6 +69,31 @@ const UI = {
         text: document.getElementById('loadingText'),
     },
 };
+
+// ============================================
+// THREE.JS INITIALIZATION
+// ============================================
+function initThreeWorld() {
+    if (!UI.canvas) {
+        throw new Error('No se encontró el canvas #gameCanvas');
+    }
+
+    World3D = createWorld({ canvas: UI.canvas, autoResize: true });
+
+    Terrain = createTerrain({ size: 600 });
+    World3D.scene.add(Terrain.mesh);
+
+    Buildings = createBuildings({ mapSize: Terrain.size, count: 45 });
+    World3D.scene.add(Buildings.group);
+
+    Sky = createSky({
+        scene: World3D.scene,
+        sunLight: World3D.lights.sunLight,
+        ambientLight: World3D.lights.ambientLight,
+    });
+
+    Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
+}
 
 // ============================================
 // GAME LOOP
@@ -85,6 +123,11 @@ function gameLoop(currentTime) {
 function update(dt) {
     // Update world time
     updateWorldTime(dt);
+
+    // Update sky + lighting based on time of day
+    if (Sky && World3D) {
+        Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
+    }
     
     // Update HUD
     updateHUD();
@@ -94,8 +137,9 @@ function update(dt) {
 // RENDER FUNCTION
 // ============================================
 function render() {
-    // Three.js rendering will be added here
-    // For now, the canvas is managed by the CSS
+    if (!World3D) return;
+
+    World3D.renderer.render(World3D.scene, World3D.camera);
 }
 
 // ============================================
@@ -166,8 +210,6 @@ function setupInputHandlers() {
         // Pointer lock will be added when Three.js is integrated
     });
     
-    // Window resize
-    window.addEventListener('resize', onWindowResize);
 }
 
 // ============================================
@@ -176,13 +218,17 @@ function setupInputHandlers() {
 function onWindowResize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    
+
+    if (World3D) {
+        World3D.resize(width, height);
+        return;
+    }
+
+    // Fallback while Three.js is not initialized yet
     if (UI.canvas) {
         UI.canvas.width = width;
         UI.canvas.height = height;
     }
-    
-    // Three.js camera aspect ratio update will be added here
 }
 
 // ============================================
@@ -270,6 +316,9 @@ async function init() {
     
     // Setup input handlers
     setupInputHandlers();
+
+    // Initialize Three.js world
+    initThreeWorld();
     
     // Load game assets
     await loadGameAssets();
