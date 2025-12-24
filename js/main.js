@@ -3,12 +3,17 @@
  * GTA 5 Style 3D Game
  */
 
+import * as THREE from 'three';
+
 import { GAME_CONFIG, DEBUG_CONFIG } from './config.js';
 
 import { createWorld } from './world.js';
 import { createTerrain } from './terrain.js';
 import { createBuildings } from './buildings.js';
 import { createSky } from './sky.js';
+import { createPlayer } from './player.js';
+import { createThirdPersonCamera } from './camera.js';
+import { createAnimationController } from './animations.js';
 
 // ============================================
 // GAME STATE
@@ -43,6 +48,9 @@ let World3D = null;
 let Terrain = null;
 let Buildings = null;
 let Sky = null;
+let Player = null;
+let PlayerCamera = null;
+let AnimationController = null;
 
 // ============================================
 // DOM ELEMENTS
@@ -92,6 +100,17 @@ function initThreeWorld() {
         ambientLight: World3D.lights.ambientLight,
     });
 
+    // Create player
+    Player = createPlayer({ position: new THREE.Vector3(0, 5, 0) });
+    World3D.scene.add(Player.mesh);
+
+    // Create animation controller
+    AnimationController = createAnimationController(Player);
+
+    // Create third-person camera controller
+    PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
+    PlayerCamera.enableMouseControl(UI.canvas);
+
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
 }
 
@@ -100,6 +119,27 @@ function initThreeWorld() {
 // ============================================
 let lastTime = 0;
 let deltaTime = 0;
+
+// ============================================
+// TERRAIN HEIGHT SAMPLING
+// ============================================
+const GroundRaycaster = new THREE.Raycaster();
+const GroundRayOrigin = new THREE.Vector3();
+const GroundRayDirection = new THREE.Vector3(0, -1, 0);
+
+function getTerrainHeightAt(x, z) {
+    if (!Terrain?.mesh) return 0;
+
+    GroundRayOrigin.set(x, 200, z);
+    GroundRaycaster.set(GroundRayOrigin, GroundRayDirection);
+
+    const hits = GroundRaycaster.intersectObject(Terrain.mesh, false);
+    if (hits.length > 0) {
+        return hits[0].point.y;
+    }
+
+    return 0;
+}
 
 function gameLoop(currentTime) {
     if (!GameState.isRunning) return;
@@ -123,6 +163,24 @@ function gameLoop(currentTime) {
 function update(dt) {
     // Update world time
     updateWorldTime(dt);
+
+    // Update player
+    if (Player && Buildings) {
+        // Get terrain height at player position
+        const playerPos = Player.getPosition();
+        const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
+        Player.update(dt, Keys, Buildings.colliders, groundHeight);
+    }
+
+    // Update animations
+    if (AnimationController && Player) {
+        AnimationController.update(dt, Player.getState());
+    }
+
+    // Update camera
+    if (PlayerCamera && Player) {
+        PlayerCamera.update(dt, Mouse);
+    }
 
     // Update sky + lighting based on time of day
     if (Sky && World3D) {
