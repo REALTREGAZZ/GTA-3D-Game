@@ -1,0 +1,441 @@
+/* ============================================
+   GTA 5 Style 3D Game - Main Styles
+   ============================================ */
+
+/* CSS Variables */
+:root {
+    --primary-color: #ffcc00;
+    --secondary-color: #ff6b35;
+    --danger-color: #ff4444;
+    --success-color: #00ff88;
+    --text-color: #ffffff;
+    --text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    --hud-bg: rgba(0, 0, 0, 0.6);
+    --hud-border: rgba(255, 255, 255, 0.2);
+    --menu-bg: rgba(0, 0, 0, 0.9);
+    --menu-hover: rgba(255, 204, 0, 0.3);
+    --font-main: 'Roboto', sans-serif;
+    --transition-speed: 0.3s;
+}
+
+/* Reset & Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-main);
+    color: var(--text-color);
+    background: #000;
+}
+
+body {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Canvas - Fullscreen */
+#gameCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 1;
+}
+
+/* ============================================
+   HUD - Heads Up Display
+   ============================================ */
+#hud {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.hud-section {
+    position: absolute;
+    pointer-events: none;
+}
+
+/* Health Section */
+.health-section {
+    bottom: 30px;
+    left: 30px;
+    width: 250px;
+}
+
+.health-section .label {
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    text-shadow: var(--text-shadow);
+}
+
+.bar-container {
+    width: 100%;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 2px solid var(--hud-border);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar {
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 2px;
+}
+
+.health-bar {
+    width: 100%;
+    background: linear-gradient(to bottom, #ff6b6b, #cc0000);
+}
+
+.health-section .value {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 12px;
+    font-weight: 900;
+    text-shadow: var(--text-shadow);
+}
+
+/* Armor Section */
+.armor-section {
+    bottom: 80px;
+    left: 30px;
+    width: 250px;
+}
+
+.armor-bar {
+    width: 50%;
+    background: linear-gradient(to bottom, #6b9fff, #0044cc);
+}
+
+/* Money Section */
+.money-section {
+    top: 30px;
+    right: 30px;
+}
+
+.money-display {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 5px;
+    font-size: 32px;
+    font-weight: 900;
+    text-shadow: var(--text-shadow);
+}
+
+.money-symbol {
+    color: var(--primary-color);
+}
+
+.money-value {
+    color: var(--success-color);
+}
+
+/* Mission Section */
+.mission-section {
+    top: 50%;
+    right: 30px;
+    transform: translateY(-50%);
+    text-align: right;
+    max-width: 300px;
+}
+
+.mission-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary-color);
+    margin-bottom: 5px;
+    text-shadow: var(--text-shadow);
+}
+
+.mission-name {
+    font-size: 18px;
+    font-weight: 700;
+    text-shadow: var(--text-shadow);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Minimap Section */
+.minimap-section {
+    bottom: 30px;
+    left: 30px;
+}
+
+.minimap {
+    width: 200px;
+    height: 200px;
+    background: rgba(0, 0, 0, 0.7);
+    border: 3px solid var(--hud-border);
+    border-radius: 5px;
+    position: relative;
+    overflow: hidden;
+}
+
+.player-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+/* Weapon Section */
+.weapon-section {
+    bottom: 30px;
+    right: 30px;
+    text-align: right;
+}
+
+.weapon-info {
+    background: var(--hud-bg);
+    padding: 15px 20px;
+    border-radius: 5px;
+    border: 2px solid var(--hud-border);
+}
+
+.weapon-name {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    text-shadow: var(--text-shadow);
+}
+
+.ammo-count {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--primary-color);
+}
+
+/* Time Section */
+.time-section {
+    top: 30px;
+    left: 30px;
+}
+
+.game-time {
+    font-size: 36px;
+    font-weight: 900;
+    text-shadow: var(--text-shadow);
+    background: var(--hud-bg);
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: 2px solid var(--hud-border);
+}
+
+/* ============================================
+   Menu Overlay (Pause Menu)
+   ============================================ */
+.menu-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--menu-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    pointer-events: auto;
+}
+
+.menu-overlay.hidden {
+    display: none;
+}
+
+.menu-container {
+    text-align: center;
+    max-width: 500px;
+    width: 90%;
+}
+
+.menu-title {
+    font-size: 64px;
+    font-weight: 900;
+    margin-bottom: 50px;
+    text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.8);
+    letter-spacing: 5px;
+}
+
+.menu-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.menu-button {
+    background: transparent;
+    border: 3px solid var(--primary-color);
+    color: var(--text-color);
+    padding: 20px 40px;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: var(--font-main);
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.menu-button:hover {
+    background: var(--menu-hover);
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.5);
+}
+
+.menu-button:active {
+    transform: scale(0.98);
+}
+
+/* ============================================
+   Loading Screen
+   ============================================ */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+}
+
+.loading-content {
+    text-align: center;
+    max-width: 600px;
+    width: 90%;
+}
+
+.game-title {
+    font-size: 48px;
+    font-weight: 900;
+    margin-bottom: 50px;
+    text-shadow: 4px 4px 8px rgba(255, 204, 0, 0.5);
+    letter-spacing: 5px;
+}
+
+.loading-bar-container {
+    width: 100%;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 3px solid var(--primary-color);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.loading-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(to right, var(--secondary-color), var(--primary-color));
+    transition: width 0.3s ease;
+    animation: loadingShimmer 2s infinite;
+}
+
+@keyframes loadingShimmer {
+    0% { background-position: -200px 0; }
+    100% { background-position: 200px 0; }
+}
+
+.loading-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--primary-color);
+    text-shadow: var(--text-shadow);
+}
+
+/* ============================================
+   Responsive Design
+   ============================================ */
+@media (max-width: 768px) {
+    .health-section,
+    .armor-section,
+    .minimap-section {
+        left: 15px;
+    }
+    
+    .weapon-section {
+        right: 15px;
+        bottom: 15px;
+    }
+    
+    .money-section {
+        top: 15px;
+        right: 15px;
+    }
+    
+    .time-section {
+        top: 15px;
+        left: 15px;
+    }
+    
+    .game-time {
+        font-size: 24px;
+        padding: 8px 15px;
+    }
+    
+    .money-display {
+        font-size: 24px;
+    }
+    
+    .minimap {
+        width: 150px;
+        height: 150px;
+    }
+    
+    .mission-section {
+        top: auto;
+        bottom: 150px;
+        right: 15px;
+        transform: none;
+        max-width: 200px;
+    }
+    
+    .menu-title {
+        font-size: 36px;
+    }
+    
+    .menu-button {
+        padding: 15px 30px;
+        font-size: 16px;
+    }
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.hidden {
+    display: none !important;
+}
+
+.visible {
+    display: block !important;
+}
