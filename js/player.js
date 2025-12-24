@@ -1,0 +1,282 @@
+/**
+ * Player System
+ * Handles player model, movement, rotation, and collision detection
+ */
+
+import * as THREE from 'three';
+import { GAME_CONFIG } from './config.js';
+
+export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
+    const group = new THREE.Group();
+    group.name = 'Player';
+
+    // Player body (capsule-like shape using cylinder + spheres)
+    const bodyHeight = GAME_CONFIG.PLAYER.HEIGHT - GAME_CONFIG.PLAYER.RADIUS * 2;
+    const bodyGeometry = new THREE.CylinderGeometry(
+        GAME_CONFIG.PLAYER.RADIUS,
+        GAME_CONFIG.PLAYER.RADIUS,
+        bodyHeight,
+        8
+    );
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3498db,
+        roughness: 0.7,
+        metalness: 0.2,
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    body.position.y = bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS;
+    group.add(body);
+
+    // Top sphere (head)
+    const headGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.8, 8, 8);
+    const headMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffc896,
+        roughness: 0.8,
+        metalness: 0.1,
+    });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.castShadow = true;
+    head.receiveShadow = true;
+    head.position.y = bodyHeight + GAME_CONFIG.PLAYER.RADIUS * 1.8;
+    group.add(head);
+
+    // Bottom sphere (feet area)
+    const feetGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.6, 8, 6);
+    const feetMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2c3e50,
+        roughness: 0.9,
+        metalness: 0.0,
+    });
+    const feet = new THREE.Mesh(feetGeometry, feetMaterial);
+    feet.castShadow = true;
+    feet.receiveShadow = true;
+    feet.position.y = GAME_CONFIG.PLAYER.RADIUS * 0.6;
+    group.add(feet);
+
+    // Direction indicator (small box in front to show where player is facing)
+    const indicatorGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.4);
+    const indicatorMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe74c3c,
+        emissive: 0xe74c3c,
+        emissiveIntensity: 0.3,
+    });
+    const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+    indicator.position.set(0, bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS, GAME_CONFIG.PLAYER.RADIUS + 0.2);
+    group.add(indicator);
+
+    // Set initial position
+    group.position.copy(position);
+
+    // Player state
+    const state = {
+        velocity: new THREE.Vector3(),
+        rotation: 0, // Y-axis rotation in radians
+        isGrounded: true,
+        isMoving: false,
+        isRunning: false,
+        isSprinting: false,
+        currentSpeed: 0,
+        targetSpeed: 0,
+        jumpCooldown: 0,
+    };
+
+    // Player movement
+    const moveDirection = new THREE.Vector3();
+
+    function update(deltaTime, inputKeys, colliders = [], groundY = 0) {
+        // Reset movement flags
+        state.isMoving = false;
+        state.isRunning = false;
+        state.isSprinting = false;
+
+        // Calculate movement direction from input
+        moveDirection.set(0, 0, 0);
+
+        // Check forward/backward
+        if (inputKeys.KeyW || inputKeys.ArrowUp) {
+            moveDirection.z -= 1;
+        }
+        if (inputKeys.KeyS || inputKeys.ArrowDown) {
+            moveDirection.z += 1;
+        }
+
+        // Check left/right
+        if (inputKeys.KeyA || inputKeys.ArrowLeft) {
+            moveDirection.x -= 1;
+        }
+        if (inputKeys.KeyD || inputKeys.ArrowRight) {
+            moveDirection.x += 1;
+        }
+
+        // Normalize movement direction
+        if (moveDirection.lengthSq() > 0) {
+            moveDirection.normalize();
+            state.isMoving = true;
+
+            // Determine speed based on input
+            if (inputKeys.ShiftLeft || inputKeys.ShiftRight) {
+                state.isRunning = true;
+                state.targetSpeed = GAME_CONFIG.PLAYER.RUN_SPEED;
+            } else {
+                state.targetSpeed = GAME_CONFIG.PLAYER.WALK_SPEED;
+            }
+        } else {
+            state.targetSpeed = 0;
+        }
+
+        // Smooth speed transition
+        const acceleration = 15.0;
+        const deceleration = 20.0;
+        if (state.targetSpeed > state.currentSpeed) {
+            state.currentSpeed = Math.min(
+                state.targetSpeed,
+                state.currentSpeed + acceleration * deltaTime
+            );
+        } else {
+            state.currentSpeed = Math.max(
+                state.targetSpeed,
+                state.currentSpeed - deceleration * deltaTime
+            );
+        }
+
+        // Rotate player to face movement direction
+        if (state.isMoving && moveDirection.lengthSq() > 0) {
+            const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
+            
+            // Smooth rotation
+            let rotationDiff = targetRotation - state.rotation;
+            
+            // Normalize angle difference to [-PI, PI]
+            while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+            while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+            
+            const rotationSpeed = 10.0;
+            state.rotation += rotationDiff * Math.min(1.0, rotationSpeed * deltaTime);
+            
+            group.rotation.y = state.rotation;
+        }
+
+        // Apply movement (in world space)
+        if (state.currentSpeed > 0) {
+            const movement = moveDirection.clone().multiplyScalar(state.currentSpeed * deltaTime);
+
+            // Check collision before moving
+            const newPosition = group.position.clone().add(movement);
+            if (!checkCollision(newPosition, colliders)) {
+                group.position.copy(newPosition);
+            } else {
+                // Try sliding along walls
+                const slideX = new THREE.Vector3(movement.x, 0, 0);
+                const testPosX = group.position.clone().add(slideX);
+                if (!checkCollision(testPosX, colliders)) {
+                    group.position.copy(testPosX);
+                }
+
+                const slideZ = new THREE.Vector3(0, 0, movement.z);
+                const testPosZ = group.position.clone().add(slideZ);
+                if (!checkCollision(testPosZ, colliders)) {
+                    group.position.copy(testPosZ);
+                }
+            }
+        }
+
+        // Apply gravity
+        if (!state.isGrounded) {
+            state.velocity.y -= GAME_CONFIG.PLAYER.GRAVITY * deltaTime;
+        } else {
+            state.velocity.y = 0;
+        }
+
+        // Jump
+        if (inputKeys.Space && state.isGrounded && state.jumpCooldown <= 0) {
+            state.velocity.y = GAME_CONFIG.PLAYER.JUMP_FORCE;
+            state.isGrounded = false;
+            state.jumpCooldown = GAME_CONFIG.PLAYER.JUMP_COOLDOWN;
+        }
+
+        // Update jump cooldown
+        if (state.jumpCooldown > 0) {
+            state.jumpCooldown -= deltaTime;
+        }
+
+        // Apply vertical velocity
+        group.position.y += state.velocity.y * deltaTime;
+
+        // Ground check (terrain height)
+        const groundLevel = groundY;
+        if (group.position.y <= groundLevel) {
+            group.position.y = groundLevel;
+            state.isGrounded = true;
+            state.velocity.y = 0;
+        } else {
+            state.isGrounded = false;
+        }
+
+        // If grounded, keep glued to the terrain when walking over small height changes
+        if (state.isGrounded) {
+            group.position.y = groundLevel;
+        }
+
+        // Keep player within terrain bounds
+        const maxDistance = 280;
+        if (Math.abs(group.position.x) > maxDistance) {
+            group.position.x = Math.sign(group.position.x) * maxDistance;
+        }
+        if (Math.abs(group.position.z) > maxDistance) {
+            group.position.z = Math.sign(group.position.z) * maxDistance;
+        }
+    }
+
+    function checkCollision(position, colliders) {
+        if (!colliders || colliders.length === 0) return false;
+
+        const playerRadius = GAME_CONFIG.PLAYER.RADIUS * 1.2; // Slightly larger for safety
+        const playerCenter = position.clone();
+        playerCenter.y += GAME_CONFIG.PLAYER.HEIGHT / 2;
+
+        for (const collider of colliders) {
+            const distance = collider.box.distanceToPoint(playerCenter);
+            if (distance <= playerRadius) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    function getPosition() {
+        return group.position.clone();
+    }
+
+    function getRotation() {
+        return state.rotation;
+    }
+
+    function getState() {
+        return { ...state };
+    }
+
+    function getCameraTarget() {
+        // Return position at eye level for camera to look at
+        const target = group.position.clone();
+        target.y += GAME_CONFIG.PLAYER.CAMERA_HEIGHT;
+        return target;
+    }
+
+    return {
+        mesh: group,
+        body,
+        head,
+        feet,
+        indicator,
+        state,
+        update,
+        getPosition,
+        getRotation,
+        getState,
+        getCameraTarget,
+        checkCollision,
+    };
+}
