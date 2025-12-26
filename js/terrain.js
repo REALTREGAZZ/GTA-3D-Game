@@ -66,6 +66,7 @@ export function createTerrain({
     }
 
     geometry.computeVertexNormals();
+    geometry.attributes.position.needsUpdate = true;
     geometry.rotateX(-Math.PI / 2);
 
     const texture = createCheckerTexture();
@@ -79,6 +80,7 @@ export function createTerrain({
         roughness: 1.0,
         metalness: 0.0,
         map: texture || null,
+        side: THREE.DoubleSide,
     });
 
     const mesh = new THREE.Mesh(geometry, material);

@@ -268,6 +268,16 @@ function initThreeWorld() {
         UI.hud.weaponName.textContent = 'PUÑOS';
         UI.hud.weaponName.style.color = '#ffcc00';
     }
+
+    console.log('--- World Initialization Debug ---');
+    console.log('World3D:', World3D);
+    console.log('Terrain:', Terrain);
+    console.log('Buildings:', Buildings);
+    console.log('Player:', Player);
+    console.log('Camera:', World3D.camera);
+    console.log('Camera Position:', World3D.camera.position);
+    console.log('Scene:', World3D.scene);
+    console.log('---------------------------------');
 }
 
 // ============================================
