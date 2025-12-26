@@ -136,6 +136,12 @@ export const GAME_CONFIG = {
         RAGDOLL_SPIN_SPEED: 720,
         RAGDOLL_SLOWMO_FACTOR: 0.2,
 
+        // Knockback & Ragdoll-Lite (for NPCs)
+        KNOCKBACK_FORCE: 25.0,           // Magnitude of initial impulse
+        KNOCKBACK_FRICTION: 0.92,        // Deceleration per frame (1.0 = no friction)
+        RAGDOLL_DURATION: 2.0,           // Seconds in ragdoll state
+        RAGDOLL_GRAVITY_SCALE: 1.2,      // Gravity during ragdoll (can be stronger)
+
         // Replay System
         REPLAY_DURATION: 8,
         REPLAY_FRAMES_BEFORE: 5,

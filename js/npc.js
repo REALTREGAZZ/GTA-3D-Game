@@ -4,6 +4,7 @@
  */
 
 import * as THREE from 'three';
+import { GAME_CONFIG } from './config.js';
 
 const NPC_STATES = {
     IDLE: 'IDLE',
@@ -86,6 +87,11 @@ export function createNPC(position = new THREE.Vector3()) {
         ragdollSpin: randRange(-1, 1),
         ragdollTilt: new THREE.Vector3(randRange(-1, 1), 0, randRange(-1, 1)).normalize(),
         baseColor: bodyMaterial.color.clone(),
+        
+        // Ragdoll-Lite state
+        isRagdoll: false,
+        ragdollTimer: 0,
+        savedState: null, // Store state before ragdoll to restore later
     };
 
     function getPosition() {
@@ -115,11 +121,41 @@ export function createNPC(position = new THREE.Vector3()) {
         state.targetPlayer = null;
         state.dieTimer = 0;
         state.despawnTimer = 0;
+        state.isRagdoll = false;
+        state.ragdollTimer = 0;
+        state.savedState = null;
         body.material.color.copy(state.baseColor);
         head.material.color.setHex(0xffc896);
         group.rotation.set(0, 0, 0);
         group.position.copy(newPosition);
         setActive(true);
+    }
+
+    function enterRagdoll(duration) {
+        if (state.state === NPC_STATES.DEAD) return;
+        
+        // Save current state to restore later
+        state.savedState = state.state;
+        state.isRagdoll = true;
+        state.ragdollTimer = duration;
+        
+        // Visual feedback: flash white or different color
+        body.material.color.setHex(0xaaaaaa);
+    }
+
+    function exitRagdoll() {
+        state.isRagdoll = false;
+        state.ragdollTimer = 0;
+        
+        // Restore previous state or default to wander
+        state.state = state.savedState || NPC_STATES.WANDER;
+        state.savedState = null;
+        
+        // Reset rotation (NPC stands up)
+        group.rotation.set(0, group.rotation.y, 0);
+        
+        // Restore color
+        body.material.color.copy(state.baseColor);
     }
 
     function takeDamage(amount, source = null) {
@@ -221,6 +257,76 @@ export function createNPC(position = new THREE.Vector3()) {
         }
 
         state.lastDamageTime += dt;
+
+        // Handle ragdoll-lite state
+        if (state.isRagdoll) {
+            state.ragdollTimer -= dt;
+            
+            // Apply gravity (stronger during ragdoll)
+            const gravity = GAME_CONFIG.COMBAT.RAGDOLL_GRAVITY_SCALE || 1.2;
+            state.velocity.y -= 9.8 * gravity * dt;
+            
+            // Apply friction to horizontal movement
+            const friction = GAME_CONFIG.COMBAT.KNOCKBACK_FRICTION || 0.92;
+            state.velocity.x *= Math.pow(friction, dt * 60);
+            state.velocity.z *= Math.pow(friction, dt * 60);
+            
+            // Move with physics
+            group.position.add(state.velocity.clone().multiplyScalar(dt));
+            
+            // Check collision with buildings
+            if (buildings?.colliders?.length) {
+                for (let i = 0; i < buildings.colliders.length; i++) {
+                    const collider = buildings.colliders[i];
+                    if (!collider?.box) continue;
+                    
+                    const d = collider.box.distanceToPoint(group.position);
+                    if (d < 0.6) {
+                        // Bounce off building
+                        const center = new THREE.Vector3();
+                        collider.box.getCenter(center);
+                        const away = group.position.clone().sub(center).setY(0);
+                        if (away.lengthSq() > 0.001) {
+                            away.normalize();
+                            group.position.add(away.multiplyScalar(0.6 - d));
+                            // Bounce velocity
+                            state.velocity.x *= -0.3;
+                            state.velocity.z *= -0.3;
+                        }
+                        break;
+                    }
+                }
+            }
+            
+            // Snap to ground
+            if (typeof terrainHeightAt === 'function') {
+                const groundY = terrainHeightAt(group.position.x, group.position.z);
+                if (group.position.y < groundY + 1.0) {
+                    group.position.y = groundY + 1.0;
+                    // Stop falling when hitting ground
+                    if (state.velocity.y < 0) {
+                        state.velocity.y = 0;
+                    }
+                }
+            }
+            
+            // Ragdoll visual: tilt while flying
+            const horizontalSpeed = Math.sqrt(state.velocity.x ** 2 + state.velocity.z ** 2);
+            if (horizontalSpeed > 1.0) {
+                const tiltAmount = Math.min(horizontalSpeed / 15.0, 0.8);
+                group.rotation.x = tiltAmount * Math.PI * 0.4;
+            } else {
+                // Gradually return to standing when slowed down
+                group.rotation.x *= 0.9;
+            }
+            
+            // Check if ragdoll time is over
+            if (state.ragdollTimer <= 0) {
+                exitRagdoll();
+            }
+            
+            return; // Skip normal AI when in ragdoll
+        }
 
         // Visual hit flash decay
         if (state.lastDamageTime > 0.08) {
@@ -434,6 +540,8 @@ export function createNPC(position = new THREE.Vector3()) {
         getPosition,
         reset,
         setActive,
+        enterRagdoll,
+        exitRagdoll,
         getState: () => ({ ...state }),
     };
 
