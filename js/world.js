@@ -33,6 +33,7 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     });
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x87ceeb); // Set a default sky-blue clear color
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
@@ -62,7 +63,7 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     scene.add(sunLight.target);
 
     function resize(width = window.innerWidth, height = window.innerHeight) {
-        renderer.setSize(width, height, false);
+        renderer.setSize(width, height, true);
         camera.aspect = width / Math.max(1, height);
         camera.updateProjectionMatrix();
     }

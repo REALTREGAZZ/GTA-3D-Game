@@ -105,6 +105,7 @@ export function createBuildings({
         roughness: 0.85,
         metalness: 0.05,
         map: texture || null,
+        side: THREE.DoubleSide,
     });
     
     // Create LOD geometries
