@@ -921,3 +921,49 @@ body {
 .health-crit {
     color: #ff3333 !important;
 }
+
+/* ============================================
+    SATIRICAL OVERLAY
+    ============================================ */
+
+.satirical-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1000;
+}
+
+#satiricalText {
+    font-size: 3rem;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 3px 3px 0px #000, -3px -3px 0px #000;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    margin: 0;
+    white-space: nowrap;
+    
+    /* Animación: fade in, stay, fade out */
+    animation: textOverlay 3s ease-in-out forwards;
+}
+
+@keyframes textOverlay {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    20% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    80% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+}

@@ -13,7 +13,8 @@ import {
     saveGraphicsPreset,
     getPresetName,
     getLowerPreset,
-    getHigherPreset
+    getHigherPreset,
+    SATIRICAL_TEXTS
 } from './config.js';
 
 import { createWorld } from './world.js';
@@ -82,6 +83,41 @@ const ScreenShakeState = {
     sampleTimer: 0,
     currentOffset: new THREE.Vector3(),
     targetOffset: new THREE.Vector3(),
+};
+
+// Overlay System for Satirical Texts
+const OverlaySystem = {
+    isShowing: false,
+    currentText: '',
+    duration: 0,
+    timer: 0,
+    
+    show(text, duration = 3.0) {
+        if (this.isShowing) return; // No superponer textos
+        
+        this.isShowing = true;
+        this.currentText = text;
+        this.duration = duration;
+        this.timer = duration;
+        
+        const element = document.getElementById('satiricalText');
+        element.textContent = text;
+        
+        // Resetear animación
+        element.style.animation = 'none';
+        setTimeout(() => {
+            element.style.animation = `textOverlay ${duration}s ease-in-out forwards`;
+        }, 10);
+    },
+    
+    update(deltaTime) {
+        if (this.isShowing) {
+            this.timer -= deltaTime;
+            if (this.timer <= 0) {
+                this.isShowing = false;
+            }
+        }
+    },
 };
 
 function clamp01(value) {
@@ -590,6 +626,46 @@ function update(dt, rawDt = dt) {
 
     // Update HUD
     updateHUD();
+    
+    // Update Overlay System
+    OverlaySystem.update(rawDt);
+    
+    // Update overlay triggers
+    updateOverlayTriggers();
+};
+
+// Function to update overlay triggers
+function updateOverlayTriggers() {
+    if (!NPCSystem || !OverlaySystem.isShowing) return;
+    
+    const activeNpcs = NPCSystem.state.active;
+    let flyingNpcs = 0;
+    
+    // Contar NPCs volando (velocity > 20)
+    for (let npc of activeNpcs) {
+        if (npc.velocity && npc.velocity.length() > 20) {
+            flyingNpcs++;
+        }
+    }
+    
+    // Si 3+ NPCs volando, mostrar texto de caos
+    if (flyingNpcs >= 3 && !OverlaySystem.isShowing) {
+        const chaosText = SATIRICAL_TEXTS.CHAOS[
+            Math.floor(Math.random() * SATIRICAL_TEXTS.CHAOS.length)
+        ];
+        OverlaySystem.show(chaosText, 2.5);
+    }
+    
+    // Si un NPC tiene velocidad extrema
+    for (let npc of activeNpcs) {
+        if (npc.velocity && npc.velocity.length() > 20 && !OverlaySystem.isShowing) {
+            const velocityText = SATIRICAL_TEXTS.HIGH_VELOCITY[
+                Math.floor(Math.random() * SATIRICAL_TEXTS.HIGH_VELOCITY.length)
+            ];
+            OverlaySystem.show(velocityText, 2.0);
+            break; // Solo mostrar uno por frame
+        }
+    }
 }
 
 // ============================================
@@ -1129,4 +1205,4 @@ init().catch(error => {
 // ============================================
 // EXPORT FOR OTHER MODULES
 // ============================================
-export { GameState, UI, Keys, Mouse };
+export { GameState, UI, Keys, Mouse, OverlaySystem };

@@ -716,4 +716,38 @@ export default {
 };
 
 // Also export COMBAT separately for easier access
+// Satirical Overlay Texts
+const SATIRICAL_TEXTS = {
+    DEATH: [
+        "Skill Issue",
+        "Physics Win Again",
+        "Unfortunate",
+        "Critical Failure",
+        "Newton's Laws Prevail",
+    ],
+    CHAOS: [
+        "That Escalated",
+        "Oops",
+        "Violence ≠ Solution",
+        "And Then They Fought",
+    ],
+    HIGH_VELOCITY: [
+        "Going Very Fast",
+        "Wheee",
+        "Physics Is Real",
+    ],
+    NPC_CHAIN: [
+        "Family Dispute",
+        "Friendly Fire",
+        "Plot Twist",
+    ],
+    RAGDOLL: [
+        "Lost The Plot",
+        "Gravity Wins",
+        "Tumbling Down",
+    ],
+};
+
 export const COMBAT_CONFIG = GAME_CONFIG.COMBAT;
+
+export { SATIRICAL_TEXTS };

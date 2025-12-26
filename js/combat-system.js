@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG, TARGET_CONFIG } from './config.js';
+import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG, TARGET_CONFIG, SATIRICAL_TEXTS } from './config.js';
 
 export function createCombatSystem(player, scene, camera, gameState, ui, options = {}) {
     const { npcSystem = null, playerProxy = null } = options;
@@ -572,6 +572,15 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         // Check for death
         if (gameState.player.health <= 0) {
             gameState.player.health = 0;
+            
+            // Show satirical death overlay
+            if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+                const deathText = SATIRICAL_TEXTS.DEATH[
+                    Math.floor(Math.random() * SATIRICAL_TEXTS.DEATH.length)
+                ];
+                OverlaySystem.show(deathText, 3.0);
+            }
+            
             triggerDeath(amount, direction);
         }
 
