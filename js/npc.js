@@ -15,6 +15,8 @@ const NPC_STATES = {
     DEAD: 'DEAD',
 };
 
+const ZERO_VEC = new THREE.Vector3();
+
 function randRange(min, max) {
     return min + Math.random() * (max - min);
 }
@@ -92,6 +94,11 @@ export function createNPC(position = new THREE.Vector3()) {
         isRagdoll: false,
         ragdollTimer: 0,
         savedState: null, // Store state before ragdoll to restore later
+        justEnteredRagdoll: false,
+        ragdollImpactSpeed: 0,
+
+        // Collision feedback
+        collisionShakeCooldown: 0,
     };
 
     function getPosition() {
@@ -124,6 +131,9 @@ export function createNPC(position = new THREE.Vector3()) {
         state.isRagdoll = false;
         state.ragdollTimer = 0;
         state.savedState = null;
+        state.justEnteredRagdoll = false;
+        state.ragdollImpactSpeed = 0;
+        state.collisionShakeCooldown = 0;
         body.material.color.copy(state.baseColor);
         head.material.color.setHex(0xffc896);
         group.rotation.set(0, 0, 0);
@@ -138,6 +148,8 @@ export function createNPC(position = new THREE.Vector3()) {
         state.savedState = state.state;
         state.isRagdoll = true;
         state.ragdollTimer = duration;
+        state.justEnteredRagdoll = true;
+        state.ragdollImpactSpeed = state.velocity.length();
         
         // Visual feedback: flash white or different color
         body.material.color.setHex(0xaaaaaa);
@@ -246,20 +258,31 @@ export function createNPC(position = new THREE.Vector3()) {
             attackPlayerRadius = 2.2,
             fleePlayerRadius = 4.0,
             detectionRadius = 20,
+            feedback = null,
         } = context;
 
         if (typeof isInView === 'function' && !isInView(group.position)) {
             // Still tick cooldowns lightly to avoid freezing forever.
             state.attackCooldown = Math.max(0, state.attackCooldown - dt);
             state.timeToChangeDir = Math.max(0, state.timeToChangeDir - dt);
+            state.collisionShakeCooldown = Math.max(0, state.collisionShakeCooldown - dt);
             state.lastDamageTime += dt;
             return;
         }
 
         state.lastDamageTime += dt;
+        state.collisionShakeCooldown = Math.max(0, state.collisionShakeCooldown - dt);
 
         // Handle ragdoll-lite state
         if (state.isRagdoll) {
+            if (state.justEnteredRagdoll) {
+                state.justEnteredRagdoll = false;
+
+                const impact = Math.min(1.0, state.ragdollImpactSpeed / 20.0);
+                feedback?.applyHitstop?.(0.4 + 0.4 * impact);
+                feedback?.applyScreenShake?.(impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
+            }
+
             state.ragdollTimer -= dt;
             
             // Apply gravity (stronger during ragdoll)
@@ -522,6 +545,26 @@ export function createNPC(position = new THREE.Vector3()) {
             delta.y = 0;
             const d = delta.length();
             if (d > 0.001 && d < 0.9) {
+                const threshold = GAME_CONFIG.COMBAT.COLLISION_SHAKE_THRESHOLD || 15.0;
+                const otherVel = other.state?.velocity || ZERO_VEC;
+                const relSpeed = state.velocity.clone().sub(otherVel).length();
+
+                if (
+                    feedback?.applyHitstop &&
+                    feedback?.applyScreenShake &&
+                    state.collisionShakeCooldown <= 0 &&
+                    relSpeed > threshold &&
+                    state.id < (other.state?.id || '')
+                ) {
+                    const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
+
+                    feedback.applyHitstop(0.5 + 0.5 * impact);
+                    feedback.applyScreenShake(0.3 + 0.7 * impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION * 0.75);
+
+                    state.collisionShakeCooldown = 0.25;
+                    if (other.state) other.state.collisionShakeCooldown = 0.25;
+                }
+
                 group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));
             }
         }

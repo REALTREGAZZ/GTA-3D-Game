@@ -86,11 +86,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         impactPoint.y += 1.0;
         createImpactParticles(impactPoint, 'MELEE');
         
-        // Camera shake for extra impact feel
-        if (camera?.addShake) {
-            camera.addShake(0.15, 0.2);
-        }
-        
         // Play sound effect
         playSound('KNOCKBACK_AIR');
     }
@@ -241,7 +236,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
 
         // Play effects (always)
         playSound('MELEE_IMPACT');
-        camera?.addShake?.(GAME_CONFIG.COMBAT.MELEE_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.MELEE_SHAKE_DURATION);
 
         // Player recoil animation
         if (player?.state) {
@@ -253,6 +247,10 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         if (!bestTarget) {
             return true;
         }
+
+        const shakeIntensity = Math.min(1.0, damage / 30);
+        gameState.applyHitstop?.(0.7);
+        gameState.applyScreenShake?.(shakeIntensity, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
 
         const hitPoint = bestTarget.mesh.position.clone();
         hitPoint.y += 1.0;
@@ -297,7 +295,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
 
         // Play effects
         playSound('RANGED_SHOT');
-        camera?.addShake?.(GAME_CONFIG.COMBAT.RANGED_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.RANGED_SHAKE_DURATION);
 
         // Camera recoil (pitch down)
         if (camera?.state) {
@@ -600,6 +597,10 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                     playSound('RANGED_IMPACT');
                     createImpactParticles(bullet.mesh.position.clone(), 'RANGED');
                     createDamageNumber(bullet.mesh.position.clone(), bullet.damage, 'RANGED');
+
+                    const shakeIntensity = Math.min(1.0, bullet.damage / 30);
+                    gameState.applyHitstop?.(0.7);
+                    gameState.applyScreenShake?.(shakeIntensity, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
 
                     state.currentCombo++;
                     if (state.currentCombo > state.bestCombo) state.bestCombo = state.currentCombo;
