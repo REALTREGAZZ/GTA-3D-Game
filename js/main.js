@@ -245,6 +245,7 @@ const UI = {
         gameTime: document.getElementById('gameTime'),
         weaponName: document.querySelector('.weapon-name'),
         ammoCount: document.querySelector('.ammo-count'),
+        targetDistance: document.createElement('div'),
     },
     menus: {
         pause: document.getElementById('pauseMenu'),
@@ -317,8 +318,7 @@ function initThreeWorld() {
     // Create NPC System
     NPCSystem = createNPCSystem({
         scene: World3D.scene,
-        maxNPCs: GraphicsState.currentPreset.name === 'POTATO' ? 10 :
-                 GraphicsState.currentPreset.name === 'LOW' ? 18 : 28,
+        maxNPCs: GraphicsState.currentPreset.npcMaxCount || 25,
         spawnInterval: 12.0,
         detectionRadius: 20,
         attackPlayerRadius: 2.2,
@@ -328,9 +328,8 @@ function initThreeWorld() {
         terrainHeightAt: getTerrainHeightAt,
     });
 
-    // Initial spawn of NPCs (will spawn after combat system is ready)
-    const initialNPCCount = GraphicsState.currentPreset.name === 'POTATO' ? 5 :
-                            GraphicsState.currentPreset.name === 'LOW' ? 8 : 10;
+    // Initial spawn of NPCs
+    const initialNPCCount = Math.floor((GraphicsState.currentPreset.npcMaxCount || 25) * 0.4);
 
     // Create combat system
     CombatUI.screenFlash = document.createElement('div');
@@ -351,6 +350,23 @@ function initThreeWorld() {
     // Get weapon UI elements
     CombatUI.weaponInfo.name = UI.hud.weaponName;
     CombatUI.weaponInfo.ammo = UI.hud.ammoCount;
+
+    // Setup distance indicator
+    UI.hud.targetDistance.id = 'targetDistance';
+    UI.hud.targetDistance.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(20px, 20px);
+        color: #ff4444;
+        font-family: 'Arial', sans-serif;
+        font-weight: bold;
+        text-shadow: 2px 2px 0px #000;
+        pointer-events: none;
+        display: none;
+        z-index: 1000;
+    `;
+    document.body.appendChild(UI.hud.targetDistance);
 
     // UI update functions
     const combatUI = {
@@ -526,12 +542,12 @@ function update(dt, rawDt = dt) {
     updateWorldTime(simDt);
 
     // Update player (scaled)
-    if (Player && Buildings) {
+    if (Player && Buildings && PlayerCamera) {
         // Get terrain height at player position
         const playerPos = Player.getPosition();
         const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
         Player.setColliders(Buildings.colliders);
-        Player.update(simDt, Keys, Buildings.colliders, groundHeight);
+        Player.update(simDt, Keys, Buildings.colliders, groundHeight, PlayerCamera.state.horizontalAngle);
     }
 
     // Update animations (scaled)
@@ -629,6 +645,16 @@ function updateHUD() {
     
     // Update mission
     UI.hud.missionName.textContent = GameState.player.currentMission;
+
+    // Update target distance
+    if (CombatSystem && CombatSystem.state && CombatSystem.state.currentTarget && Player) {
+        const target = CombatSystem.state.currentTarget;
+        const dist = target.mesh.position.distanceTo(Player.getPosition());
+        UI.hud.targetDistance.textContent = `${dist.toFixed(1)}m`;
+        UI.hud.targetDistance.style.display = 'block';
+    } else {
+        UI.hud.targetDistance.style.display = 'none';
+    }
 }
 
 // ============================================
@@ -801,8 +827,17 @@ function setupInputHandlers() {
             togglePause();
         }
 
-        // Weapon switch (Tab or Q)
-        if ((e.code === 'Tab' || e.code === 'KeyQ') && !GameState.isPaused && !GameState.isReplaying) {
+        // Targeting (Tab)
+        if (e.code === 'Tab' && !GameState.isPaused && !GameState.isReplaying) {
+            e.preventDefault();
+            if (CombatSystem) {
+                const direction = e.shiftKey ? -1 : 1;
+                CombatSystem.switchToNextTarget(direction);
+            }
+        }
+
+        // Weapon switch (Q)
+        if (e.code === 'KeyQ' && !GameState.isPaused && !GameState.isReplaying) {
             e.preventDefault();
             if (CombatSystem) {
                 CombatSystem.switchWeapon();

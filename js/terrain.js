@@ -3,6 +3,8 @@
  */
 
 import * as THREE from 'three';
+import { GRAPHICS_PRESETS } from './config.js';
+import { toonGradient } from './world.js';
 
 function createCheckerTexture({
     size = 256,
@@ -75,10 +77,9 @@ export function createTerrain({
         texture.repeat.set(repeat, repeat);
     }
 
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x3a7d3a,
-        roughness: 1.0,
-        metalness: 0.0,
+    const material = new THREE.MeshToonMaterial({
+        color: GRAPHICS_PRESETS.FLAT_COLORS.GROUND,
+        gradientMap: toonGradient,
         map: texture || null,
         side: THREE.DoubleSide,
     });

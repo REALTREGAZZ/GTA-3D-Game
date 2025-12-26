@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { createNPC } from './npc.js';
+import { GAME_CONFIG } from './config.js';
 
 export function createNPCSystem(config = {}) {
     const {
@@ -112,8 +113,24 @@ export function createNPCSystem(config = {}) {
         // Remove dead/inactive from active list
         state.active = state.active.filter((npc) => npc.state.active);
 
+        const cullingDistSq = Math.pow(GAME_CONFIG.AI_CULLING_DISTANCE || 40, 2);
+        const camPos = camera?.position;
+
         for (let i = 0; i < state.active.length; i++) {
             const npc = state.active[i];
+            
+            // Aggressive AI culling
+            if (camPos) {
+                const distSq = npc.mesh.position.distanceToSquared(camPos);
+                if (distSq > cullingDistSq) {
+                    // Skip AI update for far NPCs
+                    // But still update their basic status
+                    npc.state.attackCooldown = Math.max(0, npc.state.attackCooldown - dt);
+                    npc.state.timeToChangeDir = Math.max(0, npc.state.timeToChangeDir - dt);
+                    continue;
+                }
+            }
+
             npc.update(dt, state.active, buildings, {
                 player,
                 terrainHeightAt,
