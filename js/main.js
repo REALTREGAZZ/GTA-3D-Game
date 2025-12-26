@@ -1,12 +1,12 @@
 /**
  * Main Entry Point
- * GTA 5 Style 3D Game
+ * GTA 5 Style 3D Game - EXAGGERATED COMBAT EDITION
  */
 
 import * as THREE from 'three';
 
-import { 
-    GAME_CONFIG, 
+import {
+    GAME_CONFIG,
     DEBUG_CONFIG,
     GRAPHICS_PRESETS,
     getActivePreset,
@@ -23,6 +23,8 @@ import { createSky } from './sky.js';
 import { createPlayer } from './player.js';
 import { createThirdPersonCamera } from './camera.js';
 import { createAnimationController } from './animations.js';
+import { createCombatSystem } from './combat-system.js';
+import { createReplaySystem } from './replay-system.js';
 
 // ============================================
 // GAME STATE
@@ -31,7 +33,8 @@ const GameState = {
     isRunning: false,
     isPaused: false,
     isLoading: true,
-    
+    isReplaying: false,
+
     // Player State
     player: {
         health: GAME_CONFIG.PLAYER.MAX_HEALTH,
@@ -39,15 +42,26 @@ const GameState = {
         stamina: GAME_CONFIG.PLAYER.MAX_STAMINA,
         money: 0,
         currentMission: 'Bienvenido a la ciudad',
-        currentWeapon: 'Puños',
+        currentWeapon: 'MELEE',
+        lastDamageTime: 0,
     },
-    
+
+    // Combat Stats
+    combat: {
+        totalDamageDealt: 0,
+        hitsConnected: 0,
+        bestCombo: 0,
+    },
+
     // World State
     world: {
         time: 12.0, // 12:00 PM
         weather: 'clear',
         location: 'City Center',
     },
+
+    // Death callback for replay
+    onDeath: null,
 };
 
 // ============================================
@@ -60,6 +74,19 @@ let Sky = null;
 let Player = null;
 let PlayerCamera = null;
 let AnimationController = null;
+let CombatSystem = null;
+let ReplaySystem = null;
+
+// ============================================
+// COMBAT & REPLAY UI
+// ============================================
+const CombatUI = {
+    screenFlash: null,
+    weaponInfo: {
+        name: null,
+        ammo: null,
+    },
+};
 
 // ============================================
 // GRAPHICS STATE
@@ -144,9 +171,9 @@ function initThreeWorld() {
     Terrain = createTerrain({ size: 600 });
     World3D.scene.add(Terrain.mesh);
 
-    Buildings = createBuildings({ 
-        mapSize: Terrain.size, 
-        count: GraphicsState.currentPreset.buildingCount 
+    Buildings = createBuildings({
+        mapSize: Terrain.size,
+        count: GraphicsState.currentPreset.buildingCount
     });
     World3D.scene.add(Buildings.group);
 
@@ -167,10 +194,80 @@ function initThreeWorld() {
     PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
     PlayerCamera.enableMouseControl(UI.canvas);
 
+    // Create combat system
+    CombatUI.screenFlash = document.createElement('div');
+    CombatUI.screenFlash.id = 'screenFlash';
+    CombatUI.screenFlash.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 999;
+        background: transparent;
+        transition: background 0.1s;
+    `;
+    document.body.appendChild(CombatUI.screenFlash);
+
+    // Get weapon UI elements
+    CombatUI.weaponInfo.name = UI.hud.weaponName;
+    CombatUI.weaponInfo.ammo = UI.hud.ammoCount;
+
+    // UI update functions
+    const combatUI = {
+        updateHealth: (health, maxHealth) => {
+            const percent = (health / maxHealth) * 100;
+            UI.hud.healthBar.style.width = `${percent}%`;
+            UI.hud.healthValue.textContent = Math.round(health);
+        },
+        updateWeapon: (weapon) => {
+            if (UI.hud.weaponName) {
+                UI.hud.weaponName.textContent = weapon === 'MELEE' ? 'PUÑOS' : 'PISTOLA';
+                UI.hud.weaponName.style.color = weapon === 'MELEE' ? '#ffcc00' : '#3498db';
+            }
+            if (UI.hud.ammoCount) {
+                UI.hud.ammoCount.textContent = weapon === 'MELEE' ? '∞' : '∞';
+            }
+        },
+        screenFlash: CombatUI.screenFlash,
+    };
+
+    CombatSystem = createCombatSystem(Player, World3D.scene, World3D.camera, GameState, combatUI);
+
+    // Create replay system
+    ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
+
+    // Set up death callback
+    GameState.onDeath = (deathEvent) => {
+        GameState.isReplaying = true;
+        const stats = CombatSystem.getStats();
+        ReplaySystem.startReplay(deathEvent, stats);
+    };
+
+    // Set up replay callbacks
+    ReplaySystem.setOnStatsUpdate((stats) => {
+        GameState.combat = stats;
+    });
+
+    ReplaySystem.setOnReplayEnd(() => {
+        GameState.isReplaying = false;
+        // Respawn player
+        const spawnPos = new THREE.Vector3(0, 5, 0);
+        Player.respawn(spawnPos);
+        CombatSystem.reset();
+    });
+
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
 
     // Apply initial graphics settings
     applyGraphicsPreset(GraphicsState.currentPreset, false);
+
+    // Update weapon UI initially
+    if (UI.hud.weaponName) {
+        UI.hud.weaponName.textContent = 'PUÑOS';
+        UI.hud.weaponName.style.color = '#ffcc00';
+    }
 }
 
 // ============================================
@@ -202,26 +299,26 @@ function getTerrainHeightAt(x, z) {
 
 function gameLoop(currentTime) {
     if (!GameState.isRunning) return;
-    
+
     // Calculate delta time
     deltaTime = Math.min((currentTime - lastTime) / 1000, GAME_CONFIG.MAX_DELTA_TIME);
     lastTime = currentTime;
-    
+
     // Update FPS counter
     updateFpsCounter(deltaTime);
-    
+
     if (!GameState.isPaused) {
         update(deltaTime);
-        
+
         // Check for auto-downgrade/upgrade every 2 seconds
         if (currentTime - GraphicsState.lastFpsCheckTime > 2000) {
             checkAutoAdjustQuality();
             GraphicsState.lastFpsCheckTime = currentTime;
         }
     }
-    
+
     render();
-    
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -232,11 +329,27 @@ function update(dt) {
     // Update world time
     updateWorldTime(dt);
 
+    // Update replay system (if active)
+    if (GameState.isReplaying && ReplaySystem) {
+        ReplaySystem.update(dt);
+        // Still update camera during replay
+        if (PlayerCamera) {
+            PlayerCamera.update(dt, Mouse);
+        }
+        return;
+    }
+
+    // Update combat system
+    if (CombatSystem) {
+        CombatSystem.update(dt);
+    }
+
     // Update player
     if (Player && Buildings) {
         // Get terrain height at player position
         const playerPos = Player.getPosition();
         const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
+        Player.setColliders(Buildings.colliders);
         Player.update(dt, Keys, Buildings.colliders, groundHeight);
     }
 
@@ -254,12 +367,12 @@ function update(dt) {
     if (Sky && World3D) {
         Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
     }
-    
+
     // Update LOD system based on camera position
     if (Buildings && World3D && GraphicsState.currentPreset) {
         Buildings.updateLOD(World3D.camera.position, GraphicsState.currentPreset);
     }
-    
+
     // Update debug stats
     if (DebugState.enabled) {
         DebugState.timeSinceLastUpdate += dt;
@@ -268,7 +381,7 @@ function update(dt) {
             DebugState.timeSinceLastUpdate = 0;
         }
     }
-    
+
     // Update HUD
     updateHUD();
 }
@@ -472,23 +585,51 @@ function applyGraphicsPreset(preset, regenerateBuildings = true) {
 // INPUT HANDLING
 // ============================================
 const Keys = {};
-const Mouse = { x: 0, y: 0, deltaX: 0, deltaY: 0 };
+const Mouse = { x: 0, y: 0, deltaX: 0, deltaY: 0, leftDown: false, rightDown: false };
 
 function setupInputHandlers() {
     // Keyboard events
     window.addEventListener('keydown', (e) => {
         Keys[e.code] = true;
-        
+
         // Toggle pause
         if (e.code === 'Escape') {
             togglePause();
         }
+
+        // Weapon switch (Tab or Q)
+        if ((e.code === 'Tab' || e.code === 'KeyQ') && !GameState.isPaused && !GameState.isReplaying) {
+            e.preventDefault();
+            if (CombatSystem) {
+                CombatSystem.switchWeapon();
+            }
+        }
+
+        // Replay controls
+        if (GameState.isReplaying) {
+            if (e.code === 'Space') {
+                // Restart game
+                if (ReplaySystem) {
+                    ReplaySystem.stopReplay();
+                }
+                GameState.isReplaying = false;
+                const spawnPos = new THREE.Vector3(0, 5, 0);
+                if (Player) Player.respawn(spawnPos);
+                if (CombatSystem) CombatSystem.reset();
+            }
+            if (e.code === 'KeyS') {
+                // Save clip
+                if (ReplaySystem) {
+                    ReplaySystem.saveClip();
+                }
+            }
+        }
     });
-    
+
     window.addEventListener('keyup', (e) => {
         Keys[e.code] = false;
     });
-    
+
     // Mouse events
     window.addEventListener('mousemove', (e) => {
         Mouse.deltaX = e.movementX;
@@ -496,11 +637,41 @@ function setupInputHandlers() {
         Mouse.x = e.clientX;
         Mouse.y = e.clientY;
     });
-    
-    window.addEventListener('click', () => {
-        // Pointer lock will be added when Three.js is integrated
+
+    window.addEventListener('mousedown', (e) => {
+        if (GameState.isPaused || GameState.isReplaying) return;
+
+        if (e.button === 0) {
+            Mouse.leftDown = true;
+            // Left click = Melee attack
+            if (CombatSystem && !Player?.state.isDead) {
+                CombatSystem.performMeleeAttack();
+            }
+        }
+        if (e.button === 2) {
+            Mouse.rightDown = true;
+            // Right click = Ranged attack (pistol)
+            if (CombatSystem && !Player?.state.isDead) {
+                CombatSystem.performRangedAttack();
+            }
+        }
     });
-    
+
+    window.addEventListener('mouseup', (e) => {
+        if (e.button === 0) {
+            Mouse.leftDown = false;
+        }
+        if (e.button === 2) {
+            Mouse.rightDown = false;
+        }
+    });
+
+    // Prevent context menu on right click
+    window.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
+    // Pointer lock will be added when Three.js is integrated
 }
 
 // ============================================
@@ -526,8 +697,11 @@ function onWindowResize() {
 // PAUSE MENU
 // ============================================
 function togglePause() {
+    // Don't pause during replay
+    if (GameState.isReplaying) return;
+
     GameState.isPaused = !GameState.isPaused;
-    
+
     if (GameState.isPaused) {
         UI.menus.pause.classList.remove('hidden');
         setupPauseMenuHandlers();

@@ -1,10 +1,10 @@
 /**
  * Player System
- * Handles player model, movement, rotation, and collision detection
+ * Handles player model, movement, rotation, collision detection, and combat mechanics
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG } from './config.js';
+import { GAME_CONFIG, PHYSICS_CONFIG } from './config.js';
 
 export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     const group = new THREE.Group();
@@ -69,6 +69,11 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     // Set initial position
     group.position.copy(position);
 
+    // Original materials for flash effect
+    const originalBodyMaterial = bodyMaterial.clone();
+    const originalHeadMaterial = headMaterial.clone();
+    const originalFeetMaterial = feetMaterial.clone();
+
     // Player state
     const state = {
         velocity: new THREE.Vector3(),
@@ -80,12 +85,51 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         currentSpeed: 0,
         targetSpeed: 0,
         jumpCooldown: 0,
+
+        // Combat state
+        flashTime: 0,
+        recoil: 0,
+        isDead: false,
+        ragdollTime: 0,
+        ragdollSpin: 0,
+
+        // Health
+        health: GAME_CONFIG.PLAYER.MAX_HEALTH,
+        lastDamageTime: 0,
     };
 
     // Player movement
     const moveDirection = new THREE.Vector3();
 
     function update(deltaTime, inputKeys, colliders = [], groundY = 0) {
+        // If dead and in ragdoll mode
+        if (state.isDead) {
+            updateRagdoll(deltaTime);
+            return;
+        }
+
+        // Update flash effect
+        if (state.flashTime > 0) {
+            state.flashTime -= deltaTime;
+            if (state.flashTime <= 0) {
+                // Restore original materials
+                body.material = originalBodyMaterial;
+                head.material = originalHeadMaterial;
+                feet.material = originalFeetMaterial;
+            } else {
+                // Flash white
+                body.material.color.setHex(0xffffff);
+                head.material.color.setHex(0xffffff);
+                feet.material.color.setHex(0xffffff);
+            }
+        }
+
+        // Update recoil
+        if (state.recoil > 0) {
+            state.recoil -= deltaTime * 5;
+            if (state.recoil < 0) state.recoil = 0;
+        }
+
         // Reset movement flags
         state.isMoving = false;
         state.isRunning = false;
@@ -144,17 +188,17 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         // Rotate player to face movement direction
         if (state.isMoving && moveDirection.lengthSq() > 0) {
             const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
-            
+
             // Smooth rotation
             let rotationDiff = targetRotation - state.rotation;
-            
+
             // Normalize angle difference to [-PI, PI]
             while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
             while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
-            
+
             const rotationSpeed = 10.0;
             state.rotation += rotationDiff * Math.min(1.0, rotationSpeed * deltaTime);
-            
+
             group.rotation.y = state.rotation;
         }
 
@@ -229,6 +273,35 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         }
     }
 
+    function updateRagdoll(deltaTime) {
+        // Ragdoll spin animation (exaggerated)
+        state.ragdollTime += deltaTime;
+        state.ragdollSpin += GAME_CONFIG.COMBAT.RAGDOLL_SPIN_SPEED * deltaTime;
+
+        // Slow fall during death
+        const slowFall = 0.5;
+        group.position.y -= 2 * deltaTime * slowFall;
+
+        // Spin the body
+        group.rotation.x = Math.sin(state.ragdollTime * 3) * 0.3;
+        group.rotation.y = state.ragdollSpin * Math.PI / 180;
+        group.rotation.z = Math.cos(state.ragdollTime * 2) * 0.2;
+
+        // Keep within bounds
+        const maxDistance = 280;
+        if (Math.abs(group.position.x) > maxDistance) {
+            group.position.x = Math.sign(group.position.x) * maxDistance;
+        }
+        if (Math.abs(group.position.z) > maxDistance) {
+            group.position.z = Math.sign(group.position.z) * maxDistance;
+        }
+
+        // Floor collision
+        if (group.position.y < 0) {
+            group.position.y = 0;
+        }
+    }
+
     function checkCollision(position, colliders) {
         if (!colliders || colliders.length === 0) return false;
 
@@ -265,6 +338,70 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         return target;
     }
 
+    function takeDamage(amount, direction) {
+        state.health -= amount;
+        state.lastDamageTime = 0;
+
+        // Flash effect
+        state.flashTime = GAME_CONFIG.COMBAT.IMPACT_FLASH_DURATION;
+
+        // Apply knockback in XZ plane only (no vertical fly)
+        const knockback = new THREE.Vector3(direction.x, 0, direction.z);
+        const magnitude = Math.min(amount * GAME_CONFIG.COMBAT.KNOCKBACK_MULTIPLIER, GAME_CONFIG.COMBAT.MAX_KNOCKBACK);
+        knockback.normalize().multiplyScalar(magnitude);
+
+        // Apply to position directly (simple knockback)
+        group.position.add(knockback);
+
+        // Check for death
+        if (state.health <= 0) {
+            state.health = 0;
+            triggerDeath();
+        }
+    }
+
+    function triggerDeath() {
+        if (state.isDead) return;
+
+        state.isDead = true;
+        state.ragdollTime = 0;
+        state.ragdollSpin = 0;
+
+        // Change materials to show death
+        body.material.color.setHex(0x444444);
+        head.material.color.setHex(0x444444);
+        feet.material.color.setHex(0x444444);
+    }
+
+    function respawn(position) {
+        state.health = GAME_CONFIG.PLAYER.MAX_HEALTH;
+        state.isDead = false;
+        state.ragdollTime = 0;
+        state.ragdollSpin = 0;
+        state.flashTime = 0;
+        state.recoil = 0;
+        state.velocity.set(0, 0, 0);
+        state.isGrounded = true;
+
+        // Restore materials
+        body.material = originalBodyMaterial;
+        head.material = originalHeadMaterial;
+        feet.material = originalFeetMaterial;
+
+        // Reset position
+        group.position.copy(position);
+        group.rotation.set(0, 0, 0);
+    }
+
+    function getHealth() {
+        return state.health;
+    }
+
+    function setColliders(colliders) {
+        // Store colliders for collision checking
+        group.userData.colliders = colliders;
+    }
+
     return {
         mesh: group,
         body,
@@ -278,5 +415,10 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         getState,
         getCameraTarget,
         checkCollision,
+        takeDamage,
+        triggerDeath,
+        respawn,
+        getHealth,
+        setColliders,
     };
 }
