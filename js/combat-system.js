@@ -56,6 +56,45 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
 
     const npcPlayer = playerProxy;
 
+    // Apply knockback and ragdoll to NPC
+    function applyKnockbackToNPC(npc, direction, force) {
+        if (!npc || !npc.state) return;
+        
+        // Skip if NPC is already dead
+        if (npc.state.state === 'DEAD') return;
+        
+        // Calculate knockback velocity
+        const knockbackDir = direction.clone().normalize();
+        const knockbackVel = knockbackDir.multiplyScalar(force);
+        
+        // Add some upward component for more dramatic effect
+        knockbackVel.y = force * 0.4;
+        
+        // Apply to NPC velocity
+        if (npc.state.velocity) {
+            npc.state.velocity.copy(knockbackVel);
+        }
+        
+        // Enter ragdoll state
+        if (typeof npc.enterRagdoll === 'function') {
+            const ragdollDuration = GAME_CONFIG.COMBAT.RAGDOLL_DURATION || 2.0;
+            npc.enterRagdoll(ragdollDuration);
+        }
+        
+        // Visual feedback - impact particles at hit location
+        const impactPoint = npc.mesh.position.clone();
+        impactPoint.y += 1.0;
+        createImpactParticles(impactPoint, 'MELEE');
+        
+        // Camera shake for extra impact feel
+        if (camera?.addShake) {
+            camera.addShake(0.15, 0.2);
+        }
+        
+        // Play sound effect
+        playSound('KNOCKBACK_AIR');
+    }
+
     function initAudio() {
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -221,10 +260,8 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         // Damage + aggro
         bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
 
-        // Knockback on NPC (if it supports velocity)
-        if (bestTarget.state?.velocity) {
-            bestTarget.state.velocity.add(attackDir.clone().multiplyScalar(knockback * 0.35));
-        }
+        // Apply knockback and ragdoll
+        applyKnockbackToNPC(bestTarget, attackDir, GAME_CONFIG.COMBAT.KNOCKBACK_FORCE);
 
         // Create damage number
         createDamageNumber(hitPoint, damage, 'MELEE');
@@ -556,9 +593,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                 if (dist < 1.0) {
                     npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
 
-                    if (npc.state?.velocity) {
-                        npc.state.velocity.add(bullet.direction.clone().multiplyScalar(bullet.knockback * 0.35));
-                    }
+                    // Apply knockback and ragdoll (ranged is slightly weaker than melee)
+                    const rangedKnockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE * 0.7;
+                    applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce);
 
                     playSound('RANGED_IMPACT');
                     createImpactParticles(bullet.mesh.position.clone(), 'RANGED');
