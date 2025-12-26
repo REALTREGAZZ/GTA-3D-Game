@@ -155,6 +155,17 @@ export const GAME_CONFIG = {
         RAGDOLL_DURATION: 2.0,           // Seconds in ragdoll state
         RAGDOLL_GRAVITY_SCALE: 1.2,      // Gravity during ragdoll (can be stronger)
 
+        // Furia System (Venganza Física)
+        FURIA: {
+            FURIA_DURATION: 3.0,           // Segundos que dura la furia
+            FURIA_ACCELERATION: 25.0,      // Aceleración hacia atacante
+            VELOCITY_RAGDOLL_THRESHOLD: 10.0,  // Velocidad que causa ragdoll
+            RAGDOLL_DURATION_FROM_VELOCITY: 1.5,  // Duración del ragdoll por velocidad
+            RAGDOLL_COLLISION_DAMAGE: 5,   // Daño causado al tocar otros durante ragdoll
+            RAGDOLL_EXIT_VELOCITY: 3.0,    // Velocidad bajo la cual puede levantarse
+            IMPULSE_THRESHOLD: 5.0,        // Impulso mínimo para registrar como "golpe"
+        },
+
         // Replay System
         REPLAY_DURATION: 8,
         REPLAY_FRAMES_BEFORE: 5,
