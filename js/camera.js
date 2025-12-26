@@ -1,6 +1,6 @@
 /**
  * Camera System
- * Third-person camera with smooth following and optional mouse rotation
+ * Third-person camera with smooth following, shake, and replay mode
  */
 
 import * as THREE from 'three';
@@ -9,20 +9,36 @@ import { CAMERA_CONFIG, INPUT_CONFIG } from './config.js';
 export function createThirdPersonCamera(camera, player) {
     const state = {
         distance: CAMERA_CONFIG.THIRD_PERSON.DEFAULT_DISTANCE,
-        horizontalAngle: 0, // Rotation around player (Y-axis)
+        horizontalAngle: 0,
         verticalAngle: CAMERA_CONFIG.THIRD_PERSON.DEFAULT_VERTICAL_ANGLE,
-        
+
         // Current smoothed position
         currentPosition: new THREE.Vector3(),
         currentLookAt: new THREE.Vector3(),
-        
+
         // Target position
         targetPosition: new THREE.Vector3(),
         targetLookAt: new THREE.Vector3(),
-        
+
         // Mouse control
         isMouseControlEnabled: false,
         pointerLocked: false,
+
+        // Shake state
+        shakeIntensity: 0,
+        shakeDuration: 0,
+        shakeTime: 0,
+        shakeDecay: CAMERA_CONFIG.SHAKE.DECAY_RATE,
+
+        // Recoil
+        recoilPitch: 0,
+        recoilYaw: 0,
+        recoilRecovery: 5.0,
+
+        // Replay mode
+        isReplayMode: false,
+        replayPosition: new THREE.Vector3(),
+        replayLookAt: new THREE.Vector3(),
     };
 
     // Initialize camera position
@@ -33,7 +49,7 @@ export function createThirdPersonCamera(camera, player) {
         playerPos.z + state.distance
     );
     state.currentLookAt.copy(player.getCameraTarget());
-    
+
     camera.position.copy(state.currentPosition);
     camera.lookAt(state.currentLookAt);
 
@@ -42,7 +58,7 @@ export function createThirdPersonCamera(camera, player) {
         if (!canvas) return;
 
         canvas.addEventListener('click', () => {
-            if (!state.pointerLocked) {
+            if (!state.pointerLocked && !state.isReplayMode) {
                 canvas.requestPointerLock();
             }
         });
@@ -57,7 +73,68 @@ export function createThirdPersonCamera(camera, player) {
         });
     }
 
+    function addShake(intensity, duration) {
+        state.shakeIntensity = Math.max(state.shakeIntensity, intensity);
+        state.shakeDuration = Math.max(state.shakeDuration, duration);
+        state.shakeTime = duration;
+    }
+
+    function updateShake(deltaTime) {
+        if (state.shakeTime > 0) {
+            state.shakeTime -= deltaTime;
+
+            // Calculate shake amount
+            const shakeAmount = state.shakeIntensity * (state.shakeTime / state.shakeDuration);
+            state.shakeIntensity = shakeAmount;
+
+            if (state.shakeTime <= 0) {
+                state.shakeIntensity = 0;
+            }
+        }
+    }
+
+    function applyShake() {
+        if (state.shakeIntensity <= 0) return;
+
+        const shakeX = (Math.random() - 0.5) * 2 * state.shakeIntensity;
+        const shakeY = (Math.random() - 0.5) * 2 * state.shakeIntensity;
+        const shakeZ = (Math.random() - 0.5) * 2 * state.shakeIntensity;
+
+        camera.position.add(new THREE.Vector3(shakeX, shakeY, shakeZ));
+    }
+
+    function updateRecoil(deltaTime) {
+        // Recover from recoil
+        if (state.recoilPitch > 0) {
+            state.recoilPitch -= state.recoilRecovery * deltaTime;
+            if (state.recoilPitch < 0) state.recoilPitch = 0;
+        }
+        if (state.recoilYaw > 0) {
+            state.recoilYaw -= state.recoilRecovery * deltaTime;
+            if (state.recoilYaw < 0) state.recoilYaw = 0;
+        }
+    }
+
+    function applyRecoil() {
+        if (state.recoilPitch <= 0 && state.recoilYaw <= 0) return;
+
+        camera.rotation.x += state.recoilPitch;
+        camera.rotation.y += state.recoilYaw;
+    }
+
     function update(deltaTime, mouseInput = null) {
+        // Update shake and recoil first
+        updateShake(deltaTime);
+        updateRecoil(deltaTime);
+
+        // In replay mode, use replay camera
+        if (state.isReplayMode) {
+            camera.position.copy(state.replayPosition);
+            camera.lookAt(state.replayLookAt);
+            applyShake();
+            return;
+        }
+
         // Get player position and rotation
         const playerPos = player.getPosition();
         const playerRotation = player.getRotation();
@@ -96,15 +173,42 @@ export function createThirdPersonCamera(camera, player) {
         state.currentPosition.lerp(state.targetPosition, t);
         state.currentLookAt.lerp(state.targetLookAt, t);
 
-        // Apply to camera
+        // Apply to camera (base position)
         camera.position.copy(state.currentPosition);
         camera.lookAt(state.currentLookAt);
+
+        // Apply shake after lookAt
+        applyShake();
+
+        // Apply recoil after shake
+        applyRecoil();
 
         // Reset mouse deltas (they should be reset each frame)
         if (mouseInput) {
             mouseInput.deltaX = 0;
             mouseInput.deltaY = 0;
         }
+    }
+
+    // Replay camera mode
+    function enterReplayMode(position, lookAt) {
+        state.isReplayMode = true;
+        state.replayPosition.copy(position);
+        state.replayLookAt.copy(lookAt);
+        camera.position.copy(position);
+        camera.lookAt(lookAt);
+    }
+
+    function updateReplayCamera(position, lookAt) {
+        if (!state.isReplayMode) return;
+        state.replayPosition.copy(position);
+        state.replayLookAt.copy(lookAt);
+        camera.position.copy(position);
+        camera.lookAt(lookAt);
+    }
+
+    function exitReplayMode() {
+        state.isReplayMode = false;
     }
 
     function setDistance(newDistance) {
@@ -140,6 +244,10 @@ export function createThirdPersonCamera(camera, player) {
         getState,
         enableMouseControl,
         toggleMouseControl,
+        addShake,
+        enterReplayMode,
+        updateReplayCamera,
+        exitReplayMode,
     };
 }
 

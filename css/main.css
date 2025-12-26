@@ -627,12 +627,297 @@ body {
 }
 
 /* ============================================
-   Utility Classes
-   ============================================ */
+    Utility Classes
+    ============================================ */
 .hidden {
     display: none !important;
 }
 
 .visible {
     display: block !important;
+}
+
+/* ============================================
+    EXAGGERATED COMBAT SYSTEM STYLES
+    ============================================ */
+
+/* Screen Flash Effect */
+#screenFlash {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 999;
+    background: transparent;
+    transition: background 0.1s ease-out;
+}
+
+#screenFlash.hit {
+    background: rgba(255, 0, 0, 0.3);
+}
+
+/* Damage Numbers */
+.damage-number {
+    position: fixed;
+    font-family: 'Arial Black', 'Impact', sans-serif;
+    font-size: 48px;
+    font-weight: 900;
+    color: #ff0000;
+    text-shadow: 3px 3px 0 #000, -1px -1px 0 #fff;
+    pointer-events: none;
+    z-index: 100;
+    animation: damageFloat 1.2s ease-out forwards;
+    transform-origin: center center;
+}
+
+@keyframes damageFloat {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) translateY(0);
+    }
+    50% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.5) translateY(-30px);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.2) translateY(-60px);
+    }
+}
+
+/* Combat Flash Animation */
+@keyframes combatFlash {
+    0% { filter: brightness(1); }
+    50% { filter: brightness(3) saturate(0); }
+    100% { filter: brightness(1); }
+}
+
+.combat-flash {
+    animation: combatFlash 0.1s ease-out;
+}
+
+/* Impact Particle */
+.impact-particle {
+    position: fixed;
+    pointer-events: none;
+    z-index: 50;
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffaa00 0%, #ff6600 50%, transparent 70%);
+}
+
+/* ============================================
+    REPLAY SYSTEM STYLES
+    ============================================ */
+
+#replayOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+#replayGreyScreen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(20,20,20,0.5) 100%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+#replayUI {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+#replayOverlay.visible #replayGreyScreen,
+#replayOverlay.visible #replayUI {
+    opacity: 1;
+}
+
+#replayOverlay.frozen #replayGreyScreen {
+    opacity: 0.8;
+    animation: frozenPulse 0.1s ease-in-out infinite alternate;
+}
+
+@keyframes frozenPulse {
+    from { opacity: 0.7; }
+    to { opacity: 0.9; }
+}
+
+#replayTimer {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-family: 'Arial Black', sans-serif;
+    font-size: 28px;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000, 0 0 20px rgba(255, 200, 0, 0.5);
+    letter-spacing: 2px;
+}
+
+#replayPhase {
+    position: absolute;
+    top: 60px;
+    right: 30px;
+    font-family: 'Arial', sans-serif;
+    font-size: 14px;
+    color: #ffcc00;
+    text-shadow: 1px 1px 0 #000;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    animation: phasePulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes phasePulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.05); }
+}
+
+#deathMessage {
+    font-family: 'Arial Black', 'Impact', sans-serif;
+    font-size: 80px;
+    color: #ff3333;
+    text-shadow: 4px 4px 0 #000, -2px -2px 0 #fff, 0 0 30px rgba(255, 0, 0, 0.5);
+    letter-spacing: 5px;
+    animation: deathPulse 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes deathPulse {
+    from { transform: scale(1) rotate(-2deg); }
+    to { transform: scale(1.05) rotate(2deg); }
+}
+
+#replayStats {
+    margin-top: 30px;
+    font-family: 'Arial', sans-serif;
+    font-size: 16px;
+    color: #fff;
+    text-align: center;
+    text-shadow: 1px 1px 0 #000;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px 40px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 200, 0, 0.3);
+}
+
+#replayStats h3 {
+    color: #ffcc00;
+    margin-bottom: 15px;
+    font-size: 20px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#replayStats p {
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+#replayStats .stat-label {
+    color: #aaa;
+}
+
+#replayStats .stat-value {
+    color: #00ff88;
+    font-weight: bold;
+}
+
+#replayControls {
+    position: absolute;
+    bottom: 50px;
+    font-family: 'Arial', sans-serif;
+    font-size: 18px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    display: flex;
+    gap: 20px;
+}
+
+.key-hint {
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+}
+
+.key-hint:hover {
+    background: rgba(255, 200, 0, 0.2);
+    border-color: #ffcc00;
+    transform: scale(1.05);
+}
+
+.key-hint kbd {
+    background: #ffcc00;
+    color: #000;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    margin-right: 5px;
+}
+
+/* Replay Mode Indicator */
+.replay-mode-active {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid #ff3333;
+    color: #ff3333;
+    padding: 10px 30px;
+    font-family: 'Arial Black', sans-serif;
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    z-index: 500;
+    animation: replayIndicator 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes replayIndicator {
+    from { opacity: 0.7; }
+    to { opacity: 1; }
+}
+
+/* ============================================
+    WEAPON INDICATOR COLORS
+    ============================================ */
+
+.weapon-melee {
+    color: #ffcc00 !important;
+    text-shadow: 0 0 10px rgba(255, 200, 0, 0.5) !important;
+}
+
+.weapon-ranged {
+    color: #3498db !important;
+    text-shadow: 0 0 10px rgba(52, 152, 219, 0.5) !important;
+}
+
+/* ============================================
+    HEALTH REGEN INDICATOR
+    ============================================ */
+
+.health-regen {
+    color: #00ff88 !important;
+}
+
+.health-crit {
+    color: #ff3333 !important;
 }

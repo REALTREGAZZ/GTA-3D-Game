@@ -89,25 +89,69 @@ export const GAME_CONFIG = {
         WATER_LEVEL: -5.0,
     },
     
-    // Combat Settings
+    // Combat Settings (EXAGGERATED FOR VIRALITY)
     COMBAT: {
         // Weapons
-        WEAPON_SWITCH_TIME: 0.3,
+        WEAPON_SWITCH_TIME: 0.1,
         RELOAD_TIME: 2.0,
-        
-        // Melee
-        MELEE_RANGE: 2.0,
-        MELEE_DAMAGE: 10,
-        MELEE_COOLDOWN: 0.5,
-        
-        // Firearms
-        BULLET_SPEED: 200.0,
+
+        // Melee - EXAGGERATED IMPACT
+        MELEE_RANGE: 2.5,
+        MELEE_DAMAGE: 15,
+        MELEE_COOLDOWN: 0.4,
+        MELEE_KNOCKBACK: 10,
+        MELEE_RECOIL: 0.5,
+
+        // Ranged - CHAOS PURE
+        BULLET_SPEED: 120.0,
         BULLET_GRAVITY: 0.0,
-        BULLET_LIFETIME: 5.0,
-        
+        BULLET_LIFETIME: 3.0,
+        RANGED_DAMAGE: 20,
+        RANGED_COOLDOWN: 0.15,
+        RANGED_KNOCKBACK: 8,
+        RANGED_RECOIL_PITCH: 0.05,
+
+        // Knockback Physics
+        KNOCKBACK_MULTIPLIER: 0.8,
+        MAX_KNOCKBACK: 10,
+        KNOCKBACK_DURATION: 0.3,
+        KNOCKBACK_DAMPING: 0.95,
+
+        // Damage Numbers
+        DAMAGE_NUMBER_SIZE: 48,
+        DAMAGE_NUMBER_DURATION: 1.2,
+        DAMAGE_NUMBER_GROWTH: 1.5,
+
+        // Feedback - EXTREME
+        MELEE_SHAKE_INTENSITY: 0.4,
+        MELEE_SHAKE_DURATION: 0.15,
+        RANGED_SHAKE_INTENSITY: 0.2,
+        RANGED_SHAKE_DURATION: 0.1,
+        IMPACT_FLASH_DURATION: 0.1,
+        SCREEN_RED_DURATION: 0.2,
+
+        // Ragdoll & Death
+        DEATH_SLOWMO: 0.5,
+        DEATH_SLOWMO_DURATION: 2.0,
+        RAGDOLL_SPIN_SPEED: 720,
+        RAGDOLL_SLOWMO_FACTOR: 0.2,
+
+        // Replay System
+        REPLAY_DURATION: 8,
+        REPLAY_FRAMES_BEFORE: 5,
+        REPLAY_FRAMES_AFTER: 5,
+        REPLAY_SLOWMO_INTENSITY: 0.2,
+        REPLAY_ZOOM_FACTOR: 3.0,
+        REPLAY_ZOOM_ANGLE: Math.PI / 4,
+        FREEZE_FRAME_DURATION: 1.0,
+        REPLAY_PAUSE_END: 2.0,
+
         // Hit Detection
         HEADSHOT_MULTIPLIER: 2.0,
         LIMB_DAMAGE_MULTIPLIER: 0.8,
+
+        // Death threshold
+        DEATH_DAMAGE_THRESHOLD: 50,
     },
 };
 
@@ -157,7 +201,7 @@ export const CAMERA_CONFIG = {
         AUTO_ROTATION_SPEED: 0.1,
     },
     
-    // Camera Shake
+    // Camera Shake (EXAGGERATED)
     SHAKE: {
         WALK_INTENSITY: 0.02,
         RUN_INTENSITY: 0.05,
@@ -165,6 +209,12 @@ export const CAMERA_CONFIG = {
         EXPLOSION_INTENSITY: 0.5,
         SHOT_INTENSITY: 0.1,
         DECAY_RATE: 5.0,
+        // Exaggerated combat shake
+        MELEE_IMPACT_INTENSITY: 0.4,
+        MELEE_IMPACT_DURATION: 0.15,
+        RANGED_IMPACT_INTENSITY: 0.2,
+        RANGED_IMPACT_DURATION: 0.1,
+        REPLAY_IMPACT_INTENSITY: 0.6,
     },
 };
 
@@ -492,27 +542,53 @@ export function getHigherPreset(currentPresetName) {
 }
 
 // ============================================
-// AUDIO CONFIGURATION
+// AUDIO CONFIGURATION (EXAGGERATED FOR VIRALITY)
 // ============================================
 export const AUDIO_CONFIG = {
     // Master Volume
     MASTER_VOLUME: 1.0,
-    
+
     // Category Volumes
     MUSIC_VOLUME: 0.7,
-    SFX_VOLUME: 0.8,
+    SFX_VOLUME: 0.9,
     VOICE_VOLUME: 0.9,
     AMBIENT_VOLUME: 0.6,
     VEHICLE_VOLUME: 0.7,
-    
+
     // 3D Audio
     SPATIAL_AUDIO: true,
     MAX_DISTANCE: 100.0,
     ROLLOFF_FACTOR: 1.0,
-    
+
     // Doppler Effect
     DOPPLER_ENABLED: true,
     DOPPLER_FACTOR: 1.0,
+
+    // Exaggerated Combat Sounds (ARCADE STYLE - NO REALISM)
+    COMBAT: {
+        // Melee Impact (Comic book style "BIFF!")
+        MELEE_IMPACT_VOLUME: 0.7,
+        MELEE_IMPACT_PITCH_MIN: 0.9,
+        MELEE_IMPACT_PITCH_MAX: 1.1,
+
+        // Ranged (Toy gun style "PEW!")
+        RANGED_SHOT_VOLUME: 0.5,
+        RANGED_SHOT_PITCH: 1.0,
+        RANGED_IMPACT_VOLUME: 0.4,
+
+        // Knockback Sounds
+        KNOCKBACK_WALL_VOLUME: 0.8,
+        KNOCKBACK_AIR_VOLUME: 0.3,
+
+        // Death Sounds (Arcade style)
+        DEATH_VOLUME: 0.9,
+        DEATH_PITCH_START: 1.0,
+        DEATH_PITCH_END: 0.5,
+
+        // UI Sounds
+        WEAPON_SWITCH_VOLUME: 0.3,
+        DAMAGE_NUMBER_VOLUME: 0.2,
+    },
 };
 
 // ============================================
@@ -577,3 +653,6 @@ export default {
     UI_CONFIG,
     DEBUG_CONFIG,
 };
+
+// Also export COMBAT separately for easier access
+export const COMBAT_CONFIG = GAME_CONFIG.COMBAT;
