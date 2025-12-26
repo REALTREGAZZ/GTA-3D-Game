@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG } from './config.js';
+import { GAME_CONFIG, CAMERA_CONFIG } from './config.js';
 
 export function createReplaySystem(scene, camera, player) {
     const state = {
@@ -415,7 +415,7 @@ export function createReplaySystem(scene, camera, player) {
         }
 
         // Extreme shake during freeze
-        camera.addShake(GAME_CONFIG.CAMERA_CONFIG.SHAKE.REPLAY_IMPACT_INTENSITY * 1.5, 0.3);
+        camera?.addShake?.(CAMERA_CONFIG.SHAKE.REPLAY_IMPACT_INTENSITY * 1.5, 0.3);
 
         // Play impact sound
         playReplaySound('BONK');
