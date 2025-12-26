@@ -4,14 +4,59 @@
  */
 
 import * as THREE from 'three';
-import { GRAPHICS_CONFIG } from './config.js';
+import { GRAPHICS_CONFIG, GRAPHICS_PRESETS } from './config.js';
+
+function createToonGradient() {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 4;
+    canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#444'; ctx.fillRect(0,0,1,1);
+    ctx.fillStyle = '#888'; ctx.fillRect(1,0,1,1);
+    ctx.fillStyle = '#ccc'; ctx.fillRect(2,0,1,1);
+    ctx.fillStyle = '#fff'; ctx.fillRect(3,0,1,1);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.NearestFilter;
+    tex.magFilter = THREE.NearestFilter;
+    return tex;
+}
+
+export const toonGradient = createToonGradient();
+
+export function applyToonMaterial(mesh, colorName, outlineScale = 1.08) {
+    if (!mesh) return;
+
+    const color = GRAPHICS_PRESETS.FLAT_COLORS[colorName] || 0xffffff;
+    
+    // Create toon material
+    const toonMaterial = new THREE.MeshToonMaterial({
+        color: color,
+        gradientMap: toonGradient,
+    });
+
+    mesh.material = toonMaterial;
+
+    // Add outline
+    const outlineMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.BackSide,
+    });
+
+    const outlineMesh = new THREE.Mesh(mesh.geometry, outlineMaterial);
+    outlineMesh.scale.set(outlineScale, outlineScale, outlineScale);
+    mesh.add(outlineMesh);
+    
+    return toonMaterial;
+}
 
 export function createWorld({ canvas, autoResize = true } = {}) {
     const scene = new THREE.Scene();
 
-    // Fog is optional but helps depth perception and hides far clipping.
+    // Fog matches the flat sky color
+    const skyColor = GRAPHICS_PRESETS.FLAT_COLORS.SKY;
     scene.fog = new THREE.Fog(
-        0x87ceeb,
+        skyColor,
         GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_NEAR,
         GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_FAR,
     );
@@ -33,12 +78,11 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     });
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(0x87ceeb); // Set a default sky-blue clear color
+    renderer.setClearColor(skyColor);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMapping = THREE.NoToneMapping; // Flat shading works better without filmic tone mapping
     renderer.shadowMap.enabled = GRAPHICS_CONFIG.RENDERER.SHADOWS_ENABLED;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // Harder shadows look better with toon
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);

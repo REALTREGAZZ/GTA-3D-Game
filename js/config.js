@@ -12,6 +12,10 @@ export const GAME_CONFIG = {
     TICK_RATE: 60,
     MAX_DELTA_TIME: 0.1,
     
+    // NPC AI Settings
+    AI_CULLING_DISTANCE: 40.0,
+    AI_UPDATE_FREQUENCY: 0.1, // Update every 100ms
+    
     // Player Settings
     PLAYER: {
         // Movement Speeds
@@ -183,9 +187,9 @@ export const CAMERA_CONFIG = {
         ZOOM_SPEED: 2.0,
         
         // Angles
-        MIN_VERTICAL_ANGLE: 0.1,
-        MAX_VERTICAL_ANGLE: Math.PI / 2 - 0.1,
-        DEFAULT_VERTICAL_ANGLE: 0.3,
+        MIN_VERTICAL_ANGLE: -Math.PI / 3, // -60 degrees
+        MAX_VERTICAL_ANGLE: Math.PI / 3,  // 60 degrees
+        DEFAULT_VERTICAL_ANGLE: 0.1,
         
         // Rotation
         ROTATION_SPEED: 2.0,
@@ -231,6 +235,23 @@ export const CAMERA_CONFIG = {
         RANGED_IMPACT_DURATION: 0.1,
         REPLAY_IMPACT_INTENSITY: 0.6,
     },
+
+    // Mouse Controls
+    CONTROLS: {
+        MOUSE_SENSITIVITY: 0.005,
+        AUTO_FOLLOW: true,
+        AUTO_FOLLOW_DELAY: 2.0,
+    }
+};
+
+// ============================================
+// TARGETING CONFIGURATION
+// ============================================
+export const TARGET_CONFIG = {
+    TARGET_RANGE: 15.0,
+    TARGET_CONE: 60.0, // degrees
+    AUTO_TARGET_ROTATION: true,
+    TARGET_VISUAL_INDICATOR: true,
 };
 
 // ============================================
@@ -431,12 +452,20 @@ export const GRAPHICS_CONFIG = {
 // GRAPHICS PRESETS (5 LEVELS)
 // ============================================
 export const GRAPHICS_PRESETS = {
+    FLAT_COLORS: {
+        PLAYER: 0xFF6B6B,      
+        NPC_HOSTILE: 0xFF4444, 
+        GROUND: 0x8B9DC3,      
+        BUILDING: 0xC0A080,    
+        SKY: 0x87CEEB,         
+    },
     ULTRA: {
         name: 'ULTRA',
-        shadowMapSize: 4096,
+        shadowMapSize: 2048,
         antialiasing: true,
         bloom: true,
         buildingCount: 45,
+        npcMaxCount: 60,
         renderDistance: 800,
         shadowsEnabled: true,
         cameraNear: 0.1,
@@ -448,10 +477,11 @@ export const GRAPHICS_PRESETS = {
     },
     HIGH: {
         name: 'HIGH',
-        shadowMapSize: 2048,
+        shadowMapSize: 1024,
         antialiasing: true,
         bloom: true,
         buildingCount: 40,
+        npcMaxCount: 40,
         renderDistance: 400,
         shadowsEnabled: true,
         cameraNear: 0.1,
@@ -463,10 +493,11 @@ export const GRAPHICS_PRESETS = {
     },
     MEDIUM: {
         name: 'MEDIUM',
-        shadowMapSize: 1024,
+        shadowMapSize: 512,
         antialiasing: true,
         bloom: true,
         buildingCount: 30,
+        npcMaxCount: 25,
         renderDistance: 200,
         shadowsEnabled: true,
         cameraNear: 0.2,
@@ -478,10 +509,11 @@ export const GRAPHICS_PRESETS = {
     },
     LOW: {
         name: 'LOW',
-        shadowMapSize: 512,
+        shadowMapSize: 256,
         antialiasing: false,
         bloom: false,
         buildingCount: 15,
+        npcMaxCount: 15,
         renderDistance: 100,
         shadowsEnabled: true,
         cameraNear: 0.3,
@@ -490,6 +522,7 @@ export const GRAPHICS_PRESETS = {
         lodMedium: 60,
         lodFar: 120,
         frustumCullingDistance: 150,
+        disableSpecular: true,
     },
     POTATO: {
         name: 'POTATO',
@@ -497,6 +530,7 @@ export const GRAPHICS_PRESETS = {
         antialiasing: false,
         bloom: false,
         buildingCount: 8,
+        npcMaxCount: 8,
         renderDistance: 50,
         shadowsEnabled: false,
         cameraNear: 0.5,
@@ -505,6 +539,7 @@ export const GRAPHICS_PRESETS = {
         lodMedium: 40,
         lodFar: 80,
         frustumCullingDistance: 100,
+        disableSpecular: true,
     },
 };
 

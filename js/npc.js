@@ -4,7 +4,8 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG } from './config.js';
+import { GAME_CONFIG, GRAPHICS_PRESETS } from './config.js';
+import { applyToonMaterial } from './world.js';
 
 const NPC_STATES = {
     IDLE: 'IDLE',
@@ -34,34 +35,24 @@ export function createNPC(position = new THREE.Vector3()) {
     const radius = 0.45;
 
     const bodyGeometry = new THREE.CylinderGeometry(radius, radius, bodyHeight, 7);
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe74c3c,
-        roughness: 0.75,
-        metalness: 0.1,
-    });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    const body = new THREE.Mesh(bodyGeometry);
+    applyToonMaterial(body, 'NPC_HOSTILE', 1.1);
     body.castShadow = true;
     body.receiveShadow = true;
     body.position.y = bodyHeight / 2 + radius * 0.8;
     group.add(body);
 
     const headGeometry = new THREE.SphereGeometry(radius * 0.75, 7, 7);
-    const headMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffc896,
-        roughness: 0.8,
-        metalness: 0.1,
-    });
-    const head = new THREE.Mesh(headGeometry, headMaterial);
+    const head = new THREE.Mesh(headGeometry);
+    applyToonMaterial(head, 'NPC_HOSTILE', 1.15);
     head.castShadow = true;
     head.receiveShadow = true;
     head.position.y = bodyHeight + radius * 1.55;
     group.add(head);
 
     const indicatorGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.35);
-    const indicatorMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2ecc71,
-        emissive: 0x2ecc71,
-        emissiveIntensity: 0.25,
+    const indicatorMaterial = new THREE.MeshToonMaterial({
+        color: 0x222222,
     });
     const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
     indicator.position.set(0, bodyHeight / 2 + radius * 0.8, radius + 0.2);
@@ -88,7 +79,7 @@ export function createNPC(position = new THREE.Vector3()) {
         despawnTimer: 0,
         ragdollSpin: randRange(-1, 1),
         ragdollTilt: new THREE.Vector3(randRange(-1, 1), 0, randRange(-1, 1)).normalize(),
-        baseColor: bodyMaterial.color.clone(),
+        baseColor: body.material.color.clone(),
         
         // Ragdoll-Lite state
         isRagdoll: false,
@@ -135,7 +126,7 @@ export function createNPC(position = new THREE.Vector3()) {
         state.ragdollImpactSpeed = 0;
         state.collisionShakeCooldown = 0;
         body.material.color.copy(state.baseColor);
-        head.material.color.setHex(0xffc896);
+        head.material.color.copy(state.baseColor);
         group.rotation.set(0, 0, 0);
         group.position.copy(newPosition);
         setActive(true);

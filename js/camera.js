@@ -21,8 +21,9 @@ export function createThirdPersonCamera(camera, player) {
         targetLookAt: new THREE.Vector3(),
 
         // Mouse control
-        isMouseControlEnabled: false,
+        isMouseControlEnabled: true, // Enabled by default
         pointerLocked: false,
+        lastMouseInputTime: 0,
 
         // Shake state
         shakeIntensity: 0,
@@ -139,19 +140,33 @@ export function createThirdPersonCamera(camera, player) {
         const playerPos = player.getPosition();
         const playerRotation = player.getRotation();
 
-        // Update camera angles based on mouse input (if available and enabled)
-        if (state.isMouseControlEnabled && mouseInput && (mouseInput.deltaX !== 0 || mouseInput.deltaY !== 0)) {
-            state.horizontalAngle -= mouseInput.deltaX * INPUT_CONFIG.MOUSE.SENSITIVITY;
-            state.verticalAngle += mouseInput.deltaY * INPUT_CONFIG.MOUSE.SENSITIVITY * (INPUT_CONFIG.MOUSE.INVERT_Y ? -1 : 1);
+        const sensitivity = CAMERA_CONFIG.CONTROLS?.MOUSE_SENSITIVITY || 0.005;
+        const autoFollowDelay = CAMERA_CONFIG.CONTROLS?.AUTO_FOLLOW_DELAY || 2.0;
 
-            // Clamp vertical angle
-            state.verticalAngle = Math.max(
-                CAMERA_CONFIG.THIRD_PERSON.MIN_VERTICAL_ANGLE,
-                Math.min(CAMERA_CONFIG.THIRD_PERSON.MAX_VERTICAL_ANGLE, state.verticalAngle)
-            );
+        // Update camera angles based on mouse input
+        if (mouseInput && (mouseInput.deltaX !== 0 || mouseInput.deltaY !== 0)) {
+            state.horizontalAngle -= mouseInput.deltaX * sensitivity;
+            state.verticalAngle += mouseInput.deltaY * sensitivity;
+
+            state.lastMouseInputTime = performance.now() / 1000;
+
+            // Clamp vertical angle ±60°
+            const limit = Math.PI / 3; // 60 degrees
+            state.verticalAngle = Math.max(-limit, Math.min(limit, state.verticalAngle));
         } else {
-            // Auto-follow player rotation when not using mouse control
-            state.horizontalAngle = playerRotation;
+            // Auto-follow after delay
+            const currentTime = performance.now() / 1000;
+            if (currentTime - state.lastMouseInputTime > autoFollowDelay) {
+                // Smoothly interpolate back to player rotation
+                let angleDiff = playerRotation - state.horizontalAngle;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                
+                state.horizontalAngle += angleDiff * deltaTime * 2.0;
+                
+                // Also reset vertical angle slowly
+                state.verticalAngle += (CAMERA_CONFIG.THIRD_PERSON.DEFAULT_VERTICAL_ANGLE - state.verticalAngle) * deltaTime;
+            }
         }
 
         // Calculate target camera position based on angles

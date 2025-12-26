@@ -4,7 +4,8 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, PHYSICS_CONFIG } from './config.js';
+import { GAME_CONFIG, PHYSICS_CONFIG, GRAPHICS_PRESETS } from './config.js';
+import { applyToonMaterial } from './world.js';
 
 export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     const group = new THREE.Group();
@@ -18,12 +19,8 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         bodyHeight,
         8
     );
-    const bodyMaterial = new THREE.MeshStandardMaterial({
-        color: 0x3498db,
-        roughness: 0.7,
-        metalness: 0.2,
-    });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    const body = new THREE.Mesh(bodyGeometry);
+    applyToonMaterial(body, 'PLAYER', 1.1);
     body.castShadow = true;
     body.receiveShadow = true;
     body.position.y = bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS;
@@ -31,12 +28,8 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
 
     // Top sphere (head)
     const headGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.8, 8, 8);
-    const headMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffc896,
-        roughness: 0.8,
-        metalness: 0.1,
-    });
-    const head = new THREE.Mesh(headGeometry, headMaterial);
+    const head = new THREE.Mesh(headGeometry);
+    applyToonMaterial(head, 'PLAYER', 1.15);
     head.castShadow = true;
     head.receiveShadow = true;
     head.position.y = bodyHeight + GAME_CONFIG.PLAYER.RADIUS * 1.8;
@@ -44,23 +37,17 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
 
     // Bottom sphere (feet area)
     const feetGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.6, 8, 6);
-    const feetMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2c3e50,
-        roughness: 0.9,
-        metalness: 0.0,
-    });
-    const feet = new THREE.Mesh(feetGeometry, feetMaterial);
+    const feet = new THREE.Mesh(feetGeometry);
+    applyToonMaterial(feet, 'PLAYER', 1.2);
     feet.castShadow = true;
     feet.receiveShadow = true;
     feet.position.y = GAME_CONFIG.PLAYER.RADIUS * 0.6;
     group.add(feet);
 
-    // Direction indicator (small box in front to show where player is facing)
+    // Direction indicator
     const indicatorGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.4);
-    const indicatorMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe74c3c,
-        emissive: 0xe74c3c,
-        emissiveIntensity: 0.3,
+    const indicatorMaterial = new THREE.MeshToonMaterial({
+        color: 0x333333,
     });
     const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
     indicator.position.set(0, bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS, GAME_CONFIG.PLAYER.RADIUS + 0.2);
@@ -70,9 +57,9 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     group.position.copy(position);
 
     // Original materials for flash effect
-    const originalBodyMaterial = bodyMaterial.clone();
-    const originalHeadMaterial = headMaterial.clone();
-    const originalFeetMaterial = feetMaterial.clone();
+    const originalBodyMaterial = body.material.clone();
+    const originalHeadMaterial = head.material.clone();
+    const originalFeetMaterial = feet.material.clone();
 
     // Player state
     const state = {
@@ -101,7 +88,7 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     // Player movement
     const moveDirection = new THREE.Vector3();
 
-    function update(deltaTime, inputKeys, colliders = [], groundY = 0) {
+    function update(deltaTime, inputKeys, colliders = [], groundY = 0, cameraAngle = 0) {
         // If dead and in ragdoll mode
         if (state.isDead) {
             updateRagdoll(deltaTime);
@@ -138,20 +125,26 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         // Calculate movement direction from input
         moveDirection.set(0, 0, 0);
 
+        // Relative to camera angles
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraAngle);
+        const right = new THREE.Vector3(1, 0, 0);
+        right.applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraAngle);
+
         // Check forward/backward
         if (inputKeys.KeyW || inputKeys.ArrowUp) {
-            moveDirection.z -= 1;
+            moveDirection.add(forward);
         }
         if (inputKeys.KeyS || inputKeys.ArrowDown) {
-            moveDirection.z += 1;
+            moveDirection.sub(forward);
         }
 
         // Check left/right
         if (inputKeys.KeyA || inputKeys.ArrowLeft) {
-            moveDirection.x -= 1;
+            moveDirection.sub(right);
         }
         if (inputKeys.KeyD || inputKeys.ArrowRight) {
-            moveDirection.x += 1;
+            moveDirection.add(right);
         }
 
         // Normalize movement direction

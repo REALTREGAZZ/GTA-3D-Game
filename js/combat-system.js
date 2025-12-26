@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG } from './config.js';
+import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG, TARGET_CONFIG } from './config.js';
 
 export function createCombatSystem(player, scene, camera, gameState, ui, options = {}) {
     const { npcSystem = null, playerProxy = null } = options;
@@ -20,6 +20,10 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         hitsConnected: 0,
         bestCombo: 0,
         currentCombo: 0,
+
+        // Targeting
+        currentTarget: null,
+        targetIndicator: null,
 
         // Death tracking
         deathCause: '',
@@ -55,6 +59,90 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
     };
 
     const npcPlayer = playerProxy;
+
+    // Create target indicator
+    function createTargetIndicator() {
+        const geometry = new THREE.RingGeometry(0.8, 1.0, 32);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8
+        });
+        const indicator = new THREE.Mesh(geometry, material);
+        indicator.rotation.x = -Math.PI / 2;
+        indicator.visible = false;
+        scene.add(indicator);
+        state.targetIndicator = indicator;
+    }
+
+    createTargetIndicator();
+
+    function findAutoTarget() {
+        if (state.currentTarget && state.currentTarget.state?.active && state.currentTarget.state?.state !== 'DEAD') {
+            const dist = state.currentTarget.mesh.position.distanceTo(player.getPosition());
+            if (dist < TARGET_CONFIG.TARGET_RANGE) return; // Keep current target
+        }
+
+        const npcs = getAllNPCs();
+        const playerPos = player.getPosition();
+        const playerRotation = player.getRotation();
+        const forward = new THREE.Vector3(Math.sin(playerRotation), 0, Math.cos(playerRotation));
+
+        let bestTarget = null;
+        let minDistance = TARGET_CONFIG.TARGET_RANGE;
+
+        for (const npc of npcs) {
+            if (!npc.state?.active || npc.state?.state === 'DEAD') continue;
+            
+            const toNPC = npc.mesh.position.clone().sub(playerPos);
+            const distance = toNPC.length();
+            if (distance > minDistance) continue;
+
+            const dirToNPC = toNPC.normalize();
+            const angle = forward.angleTo(dirToNPC) * (180 / Math.PI);
+
+            if (angle < TARGET_CONFIG.TARGET_CONE / 2) {
+                minDistance = distance;
+                bestTarget = npc;
+            }
+        }
+
+        state.currentTarget = bestTarget;
+    }
+
+    function switchToNextTarget(direction = 1) {
+        const npcs = getAllNPCs().filter(n => n.state?.active && n.state?.state !== 'DEAD');
+        if (npcs.length === 0) {
+            state.currentTarget = null;
+            return;
+        }
+
+        if (!state.currentTarget) {
+            state.currentTarget = npcs[0];
+            return;
+        }
+
+        const currentIndex = npcs.indexOf(state.currentTarget);
+        let nextIndex = (currentIndex + direction + npcs.length) % npcs.length;
+        state.currentTarget = npcs[nextIndex];
+    }
+
+    function updateTargeting(dt) {
+        if (!state.currentTarget || !state.currentTarget.state?.active || state.currentTarget.state?.state === 'DEAD' || 
+            state.currentTarget.mesh.position.distanceTo(player.getPosition()) > TARGET_CONFIG.TARGET_RANGE + 5) {
+            findAutoTarget();
+        }
+
+        if (state.currentTarget && state.targetIndicator) {
+            state.targetIndicator.visible = TARGET_CONFIG.TARGET_VISUAL_INDICATOR;
+            state.targetIndicator.position.copy(state.currentTarget.mesh.position);
+            state.targetIndicator.position.y = 0.05; // Slightly above ground
+            state.targetIndicator.rotation.z += dt * 5; // Spin effect
+        } else if (state.targetIndicator) {
+            state.targetIndicator.visible = false;
+        }
+    }
 
     // Apply knockback and ragdoll to NPC
     function applyKnockbackToNPC(npc, direction, force) {
@@ -190,7 +278,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         if (state.meleeCooldown > 0) return false;
 
         const damage = GAME_CONFIG.COMBAT.MELEE_DAMAGE;
-        const knockback = GAME_CONFIG.COMBAT.MELEE_KNOCKBACK;
         const meleeRange = GAME_CONFIG.COMBAT.MELEE_RANGE || 2.5;
 
         // Get player direction
@@ -198,36 +285,55 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const playerRotation = player.getRotation();
 
         // Direction player is facing
-        const attackDir = new THREE.Vector3(
+        let attackDir = new THREE.Vector3(
             Math.sin(playerRotation),
             0,
             Math.cos(playerRotation)
         ).normalize();
 
-        const candidates = getNPCsNear(playerPos, meleeRange + 1.5);
+        // Use target if available
+        let bestTarget = state.currentTarget;
+        if (bestTarget && bestTarget.state?.active && bestTarget.state?.state !== 'DEAD') {
+            const dist = bestTarget.mesh.position.distanceTo(playerPos);
+            if (dist <= meleeRange + 1.5) {
+                // Auto-aim towards target
+                const toTarget = bestTarget.mesh.position.clone().sub(playerPos).setY(0).normalize();
+                attackDir.copy(toTarget);
+                
+                // Rotate player towards target
+                if (TARGET_CONFIG.AUTO_TARGET_ROTATION) {
+                    player.state.rotation = Math.atan2(toTarget.x, toTarget.z);
+                    player.mesh.rotation.y = player.state.rotation;
+                }
+            } else {
+                bestTarget = null;
+            }
+        }
 
-        let bestTarget = null;
-        let bestScore = -Infinity;
+        if (!bestTarget) {
+            const candidates = getNPCsNear(playerPos, meleeRange + 1.5);
+            let bestScore = -Infinity;
 
-        for (let i = 0; i < candidates.length; i++) {
-            const npc = candidates[i];
-            if (!npc?.state?.active || npc?.state?.state === 'DEAD') continue;
+            for (let i = 0; i < candidates.length; i++) {
+                const npc = candidates[i];
+                if (!npc?.state?.active || npc?.state?.state === 'DEAD') continue;
 
-            const toNPC = npc.mesh.position.clone().sub(playerPos);
-            toNPC.y = 0;
-            const dist = toNPC.length();
-            if (dist <= 0.0001 || dist > meleeRange + 0.4) continue;
+                const toNPC = npc.mesh.position.clone().sub(playerPos);
+                toNPC.y = 0;
+                const dist = toNPC.length();
+                if (dist <= 0.0001 || dist > meleeRange + 0.4) continue;
 
-            const dirTo = toNPC.clone().normalize();
-            const facing = dirTo.dot(attackDir);
+                const dirTo = toNPC.clone().normalize();
+                const facing = dirTo.dot(attackDir);
 
-            // Only hit things generally in front of player
-            if (facing < 0.25) continue;
+                // Only hit things generally in front of player
+                if (facing < 0.25) continue;
 
-            const score = facing * 2.0 - dist / meleeRange;
-            if (score > bestScore) {
-                bestScore = score;
-                bestTarget = npc;
+                const score = facing * 2.0 - dist / meleeRange;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTarget = npc;
+                }
             }
         }
 
@@ -284,11 +390,27 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const playerRotation = player.getRotation();
 
         // Direction player is facing
-        const attackDir = new THREE.Vector3(
+        let attackDir = new THREE.Vector3(
             Math.sin(playerRotation),
             0,
             Math.cos(playerRotation)
-        );
+        ).normalize();
+
+        // Use target if available
+        const bestTarget = state.currentTarget;
+        if (bestTarget && bestTarget.state?.active && bestTarget.state?.state !== 'DEAD') {
+            const dist = bestTarget.mesh.position.distanceTo(playerPos);
+            if (dist <= 30) {
+                const toTarget = bestTarget.mesh.position.clone().add(new THREE.Vector3(0, 1, 0)).sub(playerPos.clone().add(new THREE.Vector3(0, 1.2, 0))).normalize();
+                attackDir.copy(toTarget);
+
+                // Rotate player towards target
+                if (TARGET_CONFIG.AUTO_TARGET_ROTATION) {
+                    player.state.rotation = Math.atan2(toTarget.x, toTarget.z);
+                    player.mesh.rotation.y = player.state.rotation;
+                }
+            }
+        }
 
         // Create bullet
         createBullet(playerPos.clone(), attackDir, damage, knockback);
@@ -503,6 +625,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
     }
 
     function update(deltaTime) {
+        // Update targeting
+        updateTargeting(deltaTime);
+
         // Update cooldowns
         if (state.meleeCooldown > 0) state.meleeCooldown -= deltaTime;
         if (state.rangedCooldown > 0) state.rangedCooldown -= deltaTime;
@@ -752,5 +877,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         getDeathEvent,
         playSound,
         damagePlayerFromNPC,
+        switchToNextTarget,
     };
 }

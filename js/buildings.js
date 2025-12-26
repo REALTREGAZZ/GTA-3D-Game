@@ -3,6 +3,8 @@
  */
 
 import * as THREE from 'three';
+import { GRAPHICS_PRESETS } from './config.js';
+import { toonGradient } from './world.js';
 
 function createBuildingTexture({
     width = 128,
@@ -100,10 +102,9 @@ export function createBuildings({
         texture.repeat.set(1, 1);
     }
     
-    const sharedMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8a8a8a,
-        roughness: 0.85,
-        metalness: 0.05,
+    const sharedMaterial = new THREE.MeshToonMaterial({
+        color: GRAPHICS_PRESETS.FLAT_COLORS.BUILDING,
+        gradientMap: toonGradient,
         map: texture || null,
         side: THREE.DoubleSide,
     });
@@ -118,6 +119,23 @@ export function createBuildings({
         medium: new THREE.InstancedMesh(lodGeometries.medium, sharedMaterial, maxInstances),
         low: new THREE.InstancedMesh(lodGeometries.low, sharedMaterial, maxInstances),
     };
+
+    // Outline Material
+    const outlineMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.BackSide,
+    });
+
+    // Outline Geometries (scaled 1.05)
+    const outlineGeometries = {
+        high: lodGeometries.high.clone().scale(1.05, 1.05, 1.05),
+        medium: lodGeometries.medium.clone().scale(1.05, 1.05, 1.05),
+    };
+
+    const outlineMeshes = {
+        high: new THREE.InstancedMesh(outlineGeometries.high, outlineMaterial, maxInstances),
+        medium: new THREE.InstancedMesh(outlineGeometries.medium, outlineMaterial, maxInstances),
+    };
     
     // Setup shadow casting
     instancedMeshes.high.castShadow = true;
@@ -131,11 +149,15 @@ export function createBuildings({
     instancedMeshes.high.count = 0;
     instancedMeshes.medium.count = 0;
     instancedMeshes.low.count = 0;
+    outlineMeshes.high.count = 0;
+    outlineMeshes.medium.count = 0;
     
     // Add to group
     group.add(instancedMeshes.high);
     group.add(instancedMeshes.medium);
     group.add(instancedMeshes.low);
+    group.add(outlineMeshes.high);
+    group.add(outlineMeshes.medium);
     
     const half = mapSize / 2 - margin;
     let buildingsData = [];
@@ -195,9 +217,11 @@ export function createBuildings({
             // Assign to appropriate LOD level
             if (distance < lodNear) {
                 instancedMeshes.high.setMatrixAt(highCount, building.matrix);
+                outlineMeshes.high.setMatrixAt(highCount, building.matrix);
                 highCount++;
             } else if (distance < lodMedium) {
                 instancedMeshes.medium.setMatrixAt(mediumCount, building.matrix);
+                outlineMeshes.medium.setMatrixAt(mediumCount, building.matrix);
                 mediumCount++;
             } else if (distance < lodFar) {
                 instancedMeshes.low.setMatrixAt(lowCount, building.matrix);
@@ -214,10 +238,18 @@ export function createBuildings({
         instancedMeshes.high.count = highCount;
         instancedMeshes.medium.count = mediumCount;
         instancedMeshes.low.count = lowCount;
+        outlineMeshes.high.count = highCount;
+        outlineMeshes.medium.count = mediumCount;
         
         // Mark matrices as needing update
-        if (highCount > 0) instancedMeshes.high.instanceMatrix.needsUpdate = true;
-        if (mediumCount > 0) instancedMeshes.medium.instanceMatrix.needsUpdate = true;
+        if (highCount > 0) {
+            instancedMeshes.high.instanceMatrix.needsUpdate = true;
+            outlineMeshes.high.instanceMatrix.needsUpdate = true;
+        }
+        if (mediumCount > 0) {
+            instancedMeshes.medium.instanceMatrix.needsUpdate = true;
+            outlineMeshes.medium.instanceMatrix.needsUpdate = true;
+        }
         if (lowCount > 0) instancedMeshes.low.instanceMatrix.needsUpdate = true;
     }
     
@@ -250,7 +282,10 @@ export function createBuildings({
         lodGeometries.high.dispose();
         lodGeometries.medium.dispose();
         lodGeometries.low.dispose();
+        outlineGeometries.high.dispose();
+        outlineGeometries.medium.dispose();
         sharedMaterial.dispose();
+        outlineMaterial.dispose();
         if (texture) texture.dispose();
     }
     
