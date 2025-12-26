@@ -5,11 +5,9 @@
   "main": "js/main.js",
   "type": "module",
   "scripts": {
-    "dev": "http-server -p 8000 -c-1 --cors",
-    "start": "http-server -p 8000 -c-1",
-    "build": "echo 'Build process not configured yet'",
-    "lint": "echo 'Linting not configured yet'",
-    "format": "echo 'Formatting not configured yet'"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [
     "3d",
@@ -22,7 +20,7 @@
   "author": "Game Development Team",
   "license": "MIT",
   "devDependencies": {
-    "http-server": "^14.1.1"
+    "vite": "^5.0.0"
   },
   "dependencies": {
     "three": "^0.160.0"
