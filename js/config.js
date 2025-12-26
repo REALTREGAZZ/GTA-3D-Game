@@ -363,6 +363,105 @@ export const GRAPHICS_CONFIG = {
 };
 
 // ============================================
+// GRAPHICS PRESETS (5 LEVELS)
+// ============================================
+export const GRAPHICS_PRESETS = {
+    ULTRA: {
+        name: 'ULTRA',
+        shadowMapSize: 4096,
+        antialiasing: true,
+        bloom: true,
+        buildingCount: 45,
+        renderDistance: 800,
+        shadowsEnabled: true,
+    },
+    HIGH: {
+        name: 'HIGH',
+        shadowMapSize: 2048,
+        antialiasing: true,
+        bloom: true,
+        buildingCount: 40,
+        renderDistance: 400,
+        shadowsEnabled: true,
+    },
+    MEDIUM: {
+        name: 'MEDIUM',
+        shadowMapSize: 1024,
+        antialiasing: true,
+        bloom: true,
+        buildingCount: 30,
+        renderDistance: 200,
+        shadowsEnabled: true,
+    },
+    LOW: {
+        name: 'LOW',
+        shadowMapSize: 512,
+        antialiasing: false,
+        bloom: false,
+        buildingCount: 15,
+        renderDistance: 100,
+        shadowsEnabled: true,
+    },
+    POTATO: {
+        name: 'POTATO',
+        shadowMapSize: 256,
+        antialiasing: false,
+        bloom: false,
+        buildingCount: 8,
+        renderDistance: 50,
+        shadowsEnabled: false,
+    },
+};
+
+// ============================================
+// GRAPHICS SETTINGS HELPERS
+// ============================================
+
+// Get active preset from localStorage or default to MEDIUM
+export function getActivePreset() {
+    const saved = localStorage.getItem('graphicsPreset');
+    if (saved && GRAPHICS_PRESETS[saved]) {
+        return GRAPHICS_PRESETS[saved];
+    }
+    return GRAPHICS_PRESETS.MEDIUM;
+}
+
+// Save preset to localStorage
+export function saveGraphicsPreset(presetName) {
+    if (GRAPHICS_PRESETS[presetName]) {
+        localStorage.setItem('graphicsPreset', presetName);
+        console.log(`Graphics preset changed to: ${presetName}`);
+        return true;
+    }
+    return false;
+}
+
+// Get preset name from preset object
+export function getPresetName(preset) {
+    return preset?.name || 'MEDIUM';
+}
+
+// Get next lower preset (for auto-downgrade)
+export function getLowerPreset(currentPresetName) {
+    const order = ['ULTRA', 'HIGH', 'MEDIUM', 'LOW', 'POTATO'];
+    const currentIndex = order.indexOf(currentPresetName);
+    if (currentIndex < order.length - 1) {
+        return GRAPHICS_PRESETS[order[currentIndex + 1]];
+    }
+    return null; // Already at lowest
+}
+
+// Get next higher preset (for auto-upgrade)
+export function getHigherPreset(currentPresetName) {
+    const order = ['ULTRA', 'HIGH', 'MEDIUM', 'LOW', 'POTATO'];
+    const currentIndex = order.indexOf(currentPresetName);
+    if (currentIndex > 0) {
+        return GRAPHICS_PRESETS[order[currentIndex - 1]];
+    }
+    return null; // Already at highest
+}
+
+// ============================================
 // AUDIO CONFIGURATION
 // ============================================
 export const AUDIO_CONFIG = {

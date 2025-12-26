@@ -81,6 +81,33 @@ export function createWorld({ canvas, autoResize = true } = {}) {
         renderer.dispose();
     }
 
+    function applyGraphicsSettings(preset) {
+        if (!preset) return;
+
+        // Update shadow map size
+        if (sunLight.shadow && preset.shadowMapSize) {
+            sunLight.shadow.mapSize.set(preset.shadowMapSize, preset.shadowMapSize);
+            sunLight.shadow.map?.dispose();
+            sunLight.shadow.map = null;
+        }
+
+        // Enable/disable shadows
+        if (typeof preset.shadowsEnabled !== 'undefined') {
+            renderer.shadowMap.enabled = preset.shadowsEnabled;
+            sunLight.castShadow = preset.shadowsEnabled;
+        }
+
+        // Update fog based on render distance
+        if (preset.renderDistance && scene.fog) {
+            const fogNear = preset.renderDistance * 0.5;
+            const fogFar = preset.renderDistance * 1.5;
+            scene.fog.near = fogNear;
+            scene.fog.far = fogFar;
+        }
+
+        console.log(`Applied graphics settings for preset: ${preset.name}`);
+    }
+
     return {
         scene,
         camera,
@@ -91,5 +118,6 @@ export function createWorld({ canvas, autoResize = true } = {}) {
         },
         resize,
         dispose,
+        applyGraphicsSettings,
     };
 }

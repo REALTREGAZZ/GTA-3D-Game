@@ -5,7 +5,16 @@
 
 import * as THREE from 'three';
 
-import { GAME_CONFIG, DEBUG_CONFIG } from './config.js';
+import { 
+    GAME_CONFIG, 
+    DEBUG_CONFIG,
+    GRAPHICS_PRESETS,
+    getActivePreset,
+    saveGraphicsPreset,
+    getPresetName,
+    getLowerPreset,
+    getHigherPreset
+} from './config.js';
 
 import { createWorld } from './world.js';
 import { createTerrain } from './terrain.js';
@@ -53,6 +62,19 @@ let PlayerCamera = null;
 let AnimationController = null;
 
 // ============================================
+// GRAPHICS STATE
+// ============================================
+const GraphicsState = {
+    currentPreset: null,
+    autoDowngradeEnabled: true,
+    fpsHistory: [],
+    maxFpsHistoryLength: 30,
+    lowFpsCounter: 0,
+    highFpsCounter: 0,
+    lastFpsCheckTime: 0,
+};
+
+// ============================================
 // DOM ELEMENTS
 // ============================================
 const UI = {
@@ -71,10 +93,17 @@ const UI = {
     menus: {
         pause: document.getElementById('pauseMenu'),
         loading: document.getElementById('loadingScreen'),
+        graphics: document.getElementById('graphicsMenu'),
     },
     loading: {
         bar: document.getElementById('loadingBar'),
         text: document.getElementById('loadingText'),
+    },
+    settings: {
+        fpsCounter: document.getElementById('fpsCounter'),
+        fpsValue: document.getElementById('fpsValue'),
+        presetButtons: null, // Will be populated later
+        autoDowngradeToggle: document.getElementById('autoDowngradeToggle'),
     },
 };
 
@@ -86,12 +115,18 @@ function initThreeWorld() {
         throw new Error('No se encontró el canvas #gameCanvas');
     }
 
+    // Load saved graphics preset
+    GraphicsState.currentPreset = getActivePreset();
+
     World3D = createWorld({ canvas: UI.canvas, autoResize: true });
 
     Terrain = createTerrain({ size: 600 });
     World3D.scene.add(Terrain.mesh);
 
-    Buildings = createBuildings({ mapSize: Terrain.size, count: 45 });
+    Buildings = createBuildings({ 
+        mapSize: Terrain.size, 
+        count: GraphicsState.currentPreset.buildingCount 
+    });
     World3D.scene.add(Buildings.group);
 
     Sky = createSky({
@@ -112,6 +147,9 @@ function initThreeWorld() {
     PlayerCamera.enableMouseControl(UI.canvas);
 
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
+
+    // Apply initial graphics settings
+    applyGraphicsPreset(GraphicsState.currentPreset, false);
 }
 
 // ============================================
@@ -148,8 +186,17 @@ function gameLoop(currentTime) {
     deltaTime = Math.min((currentTime - lastTime) / 1000, GAME_CONFIG.MAX_DELTA_TIME);
     lastTime = currentTime;
     
+    // Update FPS counter
+    updateFpsCounter(deltaTime);
+    
     if (!GameState.isPaused) {
         update(deltaTime);
+        
+        // Check for auto-downgrade/upgrade every 2 seconds
+        if (currentTime - GraphicsState.lastFpsCheckTime > 2000) {
+            checkAutoAdjustQuality();
+            GraphicsState.lastFpsCheckTime = currentTime;
+        }
     }
     
     render();
@@ -236,6 +283,120 @@ function updateHUD() {
 }
 
 // ============================================
+// FPS COUNTER
+// ============================================
+function updateFpsCounter(deltaTime) {
+    if (deltaTime <= 0) return;
+    
+    const fps = 1 / deltaTime;
+    
+    // Add to history
+    GraphicsState.fpsHistory.push(fps);
+    if (GraphicsState.fpsHistory.length > GraphicsState.maxFpsHistoryLength) {
+        GraphicsState.fpsHistory.shift();
+    }
+    
+    // Calculate average FPS
+    const avgFps = GraphicsState.fpsHistory.reduce((sum, f) => sum + f, 0) / GraphicsState.fpsHistory.length;
+    
+    // Update display
+    UI.settings.fpsValue.textContent = Math.round(avgFps);
+    
+    // Update color based on FPS
+    UI.settings.fpsValue.classList.remove('good', 'medium', 'bad');
+    if (avgFps >= 60) {
+        UI.settings.fpsValue.classList.add('good');
+    } else if (avgFps >= 30) {
+        UI.settings.fpsValue.classList.add('medium');
+    } else {
+        UI.settings.fpsValue.classList.add('bad');
+    }
+}
+
+function getAverageFps() {
+    if (GraphicsState.fpsHistory.length === 0) return 60;
+    return GraphicsState.fpsHistory.reduce((sum, f) => sum + f, 0) / GraphicsState.fpsHistory.length;
+}
+
+// ============================================
+// AUTO QUALITY ADJUSTMENT
+// ============================================
+function checkAutoAdjustQuality() {
+    if (!GraphicsState.autoDowngradeEnabled) return;
+    
+    const avgFps = getAverageFps();
+    
+    // Check for downgrade (FPS < 45)
+    if (avgFps < 45) {
+        GraphicsState.lowFpsCounter++;
+        GraphicsState.highFpsCounter = 0;
+        
+        // Downgrade after 5 seconds (approximately 2-3 checks)
+        if (GraphicsState.lowFpsCounter >= 3) {
+            const lowerPreset = getLowerPreset(GraphicsState.currentPreset.name);
+            if (lowerPreset) {
+                console.log(`Auto-downgrading quality: FPS too low (${Math.round(avgFps)})`);
+                applyGraphicsPreset(lowerPreset, true);
+                showQualityNotification(`Bajando a calidad ${lowerPreset.name}...`);
+            }
+            GraphicsState.lowFpsCounter = 0;
+        }
+    }
+    // Check for upgrade (FPS > 60)
+    else if (avgFps > 60) {
+        GraphicsState.highFpsCounter++;
+        GraphicsState.lowFpsCounter = 0;
+        
+        // Upgrade after 10 seconds (approximately 5 checks)
+        if (GraphicsState.highFpsCounter >= 5) {
+            const higherPreset = getHigherPreset(GraphicsState.currentPreset.name);
+            if (higherPreset && higherPreset.name !== 'ULTRA') {
+                console.log(`Auto-upgrading quality: FPS stable (${Math.round(avgFps)})`);
+                applyGraphicsPreset(higherPreset, true);
+                showQualityNotification(`Subiendo a calidad ${higherPreset.name}...`);
+            }
+            GraphicsState.highFpsCounter = 0;
+        }
+    }
+    // Reset counters if FPS is in acceptable range
+    else {
+        GraphicsState.lowFpsCounter = 0;
+        GraphicsState.highFpsCounter = 0;
+    }
+}
+
+function showQualityNotification(message) {
+    console.log(message);
+    // Could add a toast notification here in the future
+}
+
+// ============================================
+// GRAPHICS PRESET APPLICATION
+// ============================================
+function applyGraphicsPreset(preset, regenerateBuildings = true) {
+    if (!preset || !World3D) return;
+    
+    GraphicsState.currentPreset = preset;
+    
+    // Apply settings to world
+    World3D.applyGraphicsSettings(preset);
+    
+    // Regenerate buildings if count changed
+    if (regenerateBuildings && Buildings) {
+        const newColliders = Buildings.regenerateBuildings(preset.buildingCount);
+        Buildings.colliders = newColliders;
+    }
+    
+    // Save to localStorage
+    saveGraphicsPreset(preset.name);
+    
+    // Update UI
+    updateGraphicsMenuActiveState();
+    
+    console.log(`Graphics preset changed to: ${preset.name}`);
+}
+
+// ============================================
 // INPUT HANDLING
 // ============================================
 const Keys = {};
@@ -310,7 +471,7 @@ function setupPauseMenuHandlers() {
     });
     
     document.getElementById('settingsBtn').addEventListener('click', () => {
-        console.log('Settings menu not implemented yet');
+        openGraphicsMenu();
     });
     
     document.getElementById('saveBtn').addEventListener('click', () => {
@@ -330,6 +491,75 @@ function removePauseMenuHandlers() {
     const buttons = UI.menus.pause.querySelectorAll('.menu-button');
     buttons.forEach(btn => {
         btn.replaceWith(btn.cloneNode(true));
+    });
+}
+
+// ============================================
+// GRAPHICS SETTINGS MENU
+// ============================================
+function openGraphicsMenu() {
+    UI.menus.pause.classList.add('hidden');
+    UI.menus.graphics.classList.remove('hidden');
+    setupGraphicsMenuHandlers();
+}
+
+function closeGraphicsMenu() {
+    UI.menus.graphics.classList.add('hidden');
+    UI.menus.pause.classList.remove('hidden');
+}
+
+function setupGraphicsMenuHandlers() {
+    // Setup preset buttons
+    const presetButtons = document.querySelectorAll('.preset-button');
+    UI.settings.presetButtons = presetButtons;
+    
+    presetButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const presetName = button.getAttribute('data-preset');
+            const preset = GRAPHICS_PRESETS[presetName];
+            if (preset) {
+                applyGraphicsPreset(preset, true);
+            }
+        });
+    });
+    
+    // Setup auto-downgrade toggle
+    const autoDowngradeToggle = UI.settings.autoDowngradeToggle;
+    if (autoDowngradeToggle) {
+        // Load saved state
+        const savedAutoDowngrade = localStorage.getItem('autoDowngrade');
+        GraphicsState.autoDowngradeEnabled = savedAutoDowngrade !== 'false';
+        autoDowngradeToggle.checked = GraphicsState.autoDowngradeEnabled;
+        
+        autoDowngradeToggle.addEventListener('change', () => {
+            GraphicsState.autoDowngradeEnabled = autoDowngradeToggle.checked;
+            localStorage.setItem('autoDowngrade', autoDowngradeToggle.checked);
+            console.log(`Auto-downgrade ${autoDowngradeToggle.checked ? 'enabled' : 'disabled'}`);
+        });
+    }
+    
+    // Setup back button
+    const backButton = document.getElementById('backToMainMenuBtn');
+    if (backButton) {
+        backButton.addEventListener('click', closeGraphicsMenu);
+    }
+    
+    // Update active state
+    updateGraphicsMenuActiveState();
+}
+
+function updateGraphicsMenuActiveState() {
+    if (!UI.settings.presetButtons) return;
+    
+    const currentPresetName = GraphicsState.currentPreset?.name || 'MEDIUM';
+    
+    UI.settings.presetButtons.forEach(button => {
+        const presetName = button.getAttribute('data-preset');
+        if (presetName === currentPresetName) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
     });
 }
 

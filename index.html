@@ -76,6 +76,12 @@
         </div>
     </div>
     
+    <!-- FPS Counter -->
+    <div id="fpsCounter" class="fps-counter">
+        <div class="fps-value" id="fpsValue">60</div>
+        <div class="fps-label">FPS</div>
+    </div>
+
     <!-- Pause Menu -->
     <div id="pauseMenu" class="menu-overlay hidden">
         <div class="menu-container">
@@ -87,6 +93,49 @@
                 <button class="menu-button" id="loadBtn">Cargar Partida</button>
                 <button class="menu-button" id="exitBtn">Salir al Menú Principal</button>
             </nav>
+        </div>
+    </div>
+
+    <!-- Graphics Settings Menu -->
+    <div id="graphicsMenu" class="menu-overlay hidden">
+        <div class="menu-container">
+            <h1 class="menu-title">CONFIGURACIÓN GRÁFICA</h1>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <h3 class="settings-subtitle">Presets de Calidad</h3>
+                    <div class="preset-buttons">
+                        <button class="preset-button" data-preset="ULTRA">
+                            <span class="preset-name">ULTRA</span>
+                            <span class="preset-desc">PC Gamer • Sombras 4K • 45 edificios</span>
+                        </button>
+                        <button class="preset-button" data-preset="HIGH">
+                            <span class="preset-name">HIGH</span>
+                            <span class="preset-desc">PC Alto • Sombras 2K • 40 edificios</span>
+                        </button>
+                        <button class="preset-button active" data-preset="MEDIUM">
+                            <span class="preset-name">MEDIUM</span>
+                            <span class="preset-desc">PC Medio • Sombras 1K • 30 edificios</span>
+                        </button>
+                        <button class="preset-button" data-preset="LOW">
+                            <span class="preset-name">LOW</span>
+                            <span class="preset-desc">PC Bajo • Sombras 512 • 15 edificios</span>
+                        </button>
+                        <button class="preset-button" data-preset="POTATO">
+                            <span class="preset-name">POTATO</span>
+                            <span class="preset-desc">PC Mínimo • Sin efectos • 8 edificios</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3 class="settings-subtitle">Auto-Optimización</h3>
+                    <label class="settings-checkbox">
+                        <input type="checkbox" id="autoDowngradeToggle" checked>
+                        <span>Ajustar calidad automáticamente según FPS</span>
+                    </label>
+                    <p class="settings-hint">El juego reducirá la calidad si FPS &lt; 45 por 5 segundos</p>
+                </div>
+            </div>
+            <button class="menu-button back-button" id="backToMainMenuBtn">Volver</button>
         </div>
     </div>
     
