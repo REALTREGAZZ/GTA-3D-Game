@@ -80,7 +80,12 @@ export function createNPC(position = new THREE.Vector3()) {
         ragdollSpin: randRange(-1, 1),
         ragdollTilt: new THREE.Vector3(randRange(-1, 1), 0, randRange(-1, 1)).normalize(),
         baseColor: body.material.color.clone(),
-        
+
+        // Furia System (Venganza Física)
+        lastAttacker: null,      // Quién me golpeó por última vez
+        lastHitTime: 0,          // Cuándo fue el último golpe
+        furia: 0,                // Timer de "furia ciega" (segundos)
+
         // Ragdoll-Lite state
         isRagdoll: false,
         ragdollTimer: 0,
@@ -125,6 +130,12 @@ export function createNPC(position = new THREE.Vector3()) {
         state.justEnteredRagdoll = false;
         state.ragdollImpactSpeed = 0;
         state.collisionShakeCooldown = 0;
+        
+        // Furia System reset
+        state.lastAttacker = null;
+        state.lastHitTime = 0;
+        state.furia = 0;
+        
         body.material.color.copy(state.baseColor);
         head.material.color.copy(state.baseColor);
         group.rotation.set(0, 0, 0);
@@ -161,7 +172,7 @@ export function createNPC(position = new THREE.Vector3()) {
         body.material.color.copy(state.baseColor);
     }
 
-    function takeDamage(amount, source = null) {
+    function takeDamage(amount, source = null, impulse = 0) {
         if (state.state === NPC_STATES.DEAD) return;
 
         state.health -= amount;
@@ -169,6 +180,14 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastDamagedBy = source;
 
         body.material.color.setHex(0xffffff);
+
+        // Furia System: Register last attacker and set furia if impulse is significant
+        const IMPULSE_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.IMPULSE_THRESHOLD || 5.0;
+        if (impulse > IMPULSE_THRESHOLD) {
+            state.lastAttacker = source;
+            state.lastHitTime = performance.now();
+            state.furia = GAME_CONFIG.COMBAT.FURIA?.FURIA_DURATION || 3.0;
+        }
 
         // Angry reaction: lock target if we can
         if (source && source.mesh) {
@@ -264,6 +283,11 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastDamageTime += dt;
         state.collisionShakeCooldown = Math.max(0, state.collisionShakeCooldown - dt);
 
+        // Furia System: Update furia timer
+        if (state.furia > 0) {
+            state.furia -= dt;
+        }
+
         // Handle ragdoll-lite state
         if (state.isRagdoll) {
             if (state.justEnteredRagdoll) {
@@ -340,6 +364,52 @@ export function createNPC(position = new THREE.Vector3()) {
             }
             
             return; // Skip normal AI when in ragdoll
+        }
+
+        // Furia System: If in furia state, override normal AI and chase attacker
+        if (state.furia > 0 && state.lastAttacker) {
+            // Check if attacker is still valid
+            let attackerValid = false;
+            if (state.lastAttacker) {
+                if (state.lastAttacker.state) {
+                    // NPC attacker
+                    attackerValid = state.lastAttacker.state.active && state.lastAttacker.state.state !== NPC_STATES.DEAD;
+                } else if (state.lastAttacker.health !== undefined) {
+                    // Player attacker (check if player is alive)
+                    attackerValid = state.lastAttacker.health > 0;
+                } else {
+                    // Assume valid if we can't determine otherwise
+                    attackerValid = true;
+                }
+            }
+            
+            if (attackerValid) {
+                // Movement directo hacia atacante
+                const attackerPos = state.lastAttacker.getPosition ? state.lastAttacker.getPosition() : state.lastAttacker.position;
+                if (attackerPos) {
+                    const dir = attackerPos.clone().sub(group.position).setY(0);
+                    const dist = dir.length();
+                    
+                    if (dist > 0.001) {
+                        dir.normalize();
+                        const FURIA_ACCEL = GAME_CONFIG.COMBAT.FURIA?.FURIA_ACCELERATION || 25.0;
+                        state.velocity.add(dir.multiplyScalar(FURIA_ACCEL * dt));
+                    }
+
+                    // Intentar atacar si está cerca
+                    const MELEE_RANGE = 2.0;
+                    if (dist < MELEE_RANGE && state.attackCooldown <= 0) {
+                        attack(state.lastAttacker);
+                    }
+                }
+            } else {
+                // Attacker is no longer valid, clear furia
+                state.furia = 0;
+                state.lastAttacker = null;
+            }
+            
+            // Update attack cooldown during furia
+            state.attackCooldown = Math.max(0, state.attackCooldown - dt);
         }
 
         // Visual hit flash decay
@@ -513,6 +583,13 @@ export function createNPC(position = new THREE.Vector3()) {
         }
         state.velocity.multiplyScalar(Math.pow(0.88, dt * 60));
 
+        // Furia System: Ragdoll por velocidad alta
+        const VELOCITY_RAGDOLL_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.VELOCITY_RAGDOLL_THRESHOLD || 10.0;
+        if (!state.isRagdoll && speed > VELOCITY_RAGDOLL_THRESHOLD) {
+            const RAGDOLL_DURATION = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_DURATION_FROM_VELOCITY || 1.5;
+            enterRagdoll(RAGDOLL_DURATION);
+        }
+
         // Move
         group.position.add(state.velocity.clone().multiplyScalar(dt));
 
@@ -541,19 +618,29 @@ export function createNPC(position = new THREE.Vector3()) {
                 const relSpeed = state.velocity.clone().sub(otherVel).length();
 
                 if (
-                    feedback?.applyHitstop &&
-                    feedback?.applyScreenShake &&
-                    state.collisionShakeCooldown <= 0 &&
-                    relSpeed > threshold &&
-                    state.id < (other.state?.id || '')
+                   feedback?.applyHitstop &&
+                   feedback?.applyScreenShake &&
+                   state.collisionShakeCooldown <= 0 &&
+                   relSpeed > threshold &&
+                   state.id < (other.state?.id || '')
                 ) {
-                    const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
+                   const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
 
-                    feedback.applyHitstop(0.5 + 0.5 * impact);
-                    feedback.applyScreenShake(0.3 + 0.7 * impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION * 0.75);
+                   feedback.applyHitstop(0.5 + 0.5 * impact);
+                   feedback.applyScreenShake(0.3 + 0.7 * impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION * 0.75);
 
-                    state.collisionShakeCooldown = 0.25;
-                    if (other.state) other.state.collisionShakeCooldown = 0.25;
+                   state.collisionShakeCooldown = 0.25;
+                   if (other.state) other.state.collisionShakeCooldown = 0.25;
+                }
+
+                // Furia System: Ragdoll collision damage
+                if (state.isRagdoll) {
+                   const RAGDOLL_COLLISION_DAMAGE = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_COLLISION_DAMAGE || 5;
+                   other.takeDamage(RAGDOLL_COLLISION_DAMAGE, api, relSpeed);
+
+                   // Knockback al otro
+                   const dir = delta.clone().normalize();
+                   other.state.velocity.add(dir.multiplyScalar(15.0));
                 }
 
                 group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));

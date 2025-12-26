@@ -361,11 +361,15 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const hitPoint = bestTarget.mesh.position.clone();
         hitPoint.y += 1.0;
 
-        // Damage + aggro
-        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
+        // Calculate impulse for Furia System
+        const knockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE;
+        const impulse = knockbackForce;
+
+        // Damage + aggro + furia
+        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
 
         // Apply knockback and ragdoll
-        applyKnockbackToNPC(bestTarget, attackDir, GAME_CONFIG.COMBAT.KNOCKBACK_FORCE);
+        applyKnockbackToNPC(bestTarget, attackDir, knockbackForce);
 
         // Create damage number
         createDamageNumber(hitPoint, damage, 'MELEE');
@@ -713,10 +717,14 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
 
                 const dist = bullet.mesh.position.distanceTo(npc.mesh.position);
                 if (dist < 1.0) {
-                    npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
-
-                    // Apply knockback and ragdoll (ranged is slightly weaker than melee)
+                    // Calculate impulse for Furia System (ranged is slightly weaker than melee)
                     const rangedKnockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE * 0.7;
+                    const impulse = rangedKnockbackForce;
+
+                    // Damage + aggro + furia
+                    npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
+
+                    // Apply knockback and ragdoll
                     applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce);
 
                     playSound('RANGED_IMPACT');
