@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, GRAPHICS_PRESETS } from './config.js';
+import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS } from './config.js';
 import { applyToonMaterial } from './world.js';
 
 const NPC_STATES = {
@@ -296,6 +296,14 @@ export function createNPC(position = new THREE.Vector3()) {
                 const impact = Math.min(1.0, state.ragdollImpactSpeed / 20.0);
                 feedback?.applyHitstop?.(0.4 + 0.4 * impact);
                 feedback?.applyScreenShake?.(impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
+                
+                // Show satirical ragdoll overlay
+                if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+                    const ragdollText = SATIRICAL_TEXTS.RAGDOLL[
+                        Math.floor(Math.random() * SATIRICAL_TEXTS.RAGDOLL.length)
+                    ];
+                    OverlaySystem.show(ragdollText, 1.5);
+                }
             }
 
             state.ragdollTimer -= dt;
@@ -641,6 +649,14 @@ export function createNPC(position = new THREE.Vector3()) {
                    // Knockback al otro
                    const dir = delta.clone().normalize();
                    other.state.velocity.add(dir.multiplyScalar(15.0));
+
+                   // Show satirical NPC chain overlay
+                   if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+                       const chainText = SATIRICAL_TEXTS.NPC_CHAIN[
+                           Math.floor(Math.random() * SATIRICAL_TEXTS.NPC_CHAIN.length)
+                       ];
+                       OverlaySystem.show(chainText, 2.0);
+                   }
                 }
 
                 group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));
