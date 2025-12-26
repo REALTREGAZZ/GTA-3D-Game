@@ -25,6 +25,7 @@ import { createThirdPersonCamera } from './camera.js';
 import { createAnimationController } from './animations.js';
 import { createCombatSystem } from './combat-system.js';
 import { createReplaySystem } from './replay-system.js';
+import { createNPCSystem } from './npc-system.js';
 
 // ============================================
 // GAME STATE
@@ -76,6 +77,8 @@ let PlayerCamera = null;
 let AnimationController = null;
 let CombatSystem = null;
 let ReplaySystem = null;
+let NPCSystem = null;
+let NPCPlayerProxy = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -194,6 +197,24 @@ function initThreeWorld() {
     PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
     PlayerCamera.enableMouseControl(UI.canvas);
 
+    // Create NPC System
+    NPCSystem = createNPCSystem({
+        scene: World3D.scene,
+        maxNPCs: GraphicsState.currentPreset.name === 'POTATO' ? 10 :
+                 GraphicsState.currentPreset.name === 'LOW' ? 18 : 28,
+        spawnInterval: 12.0,
+        detectionRadius: 20,
+        attackPlayerRadius: 2.2,
+        fleePlayerRadius: 4.0,
+        mapSize: Terrain.size,
+        buildings: Buildings,
+        terrainHeightAt: getTerrainHeightAt,
+    });
+
+    // Initial spawn of NPCs (will spawn after combat system is ready)
+    const initialNPCCount = GraphicsState.currentPreset.name === 'POTATO' ? 5 :
+                            GraphicsState.currentPreset.name === 'LOW' ? 8 : 10;
+
     // Create combat system
     CombatUI.screenFlash = document.createElement('div');
     CombatUI.screenFlash.id = 'screenFlash';
@@ -233,7 +254,25 @@ function initThreeWorld() {
         screenFlash: CombatUI.screenFlash,
     };
 
-    CombatSystem = createCombatSystem(Player, World3D.scene, PlayerCamera, GameState, combatUI);
+    // Player proxy used by NPC AI (so NPCs can find + damage player via CombatSystem)
+    NPCPlayerProxy = {
+        getPosition: () => Player.getPosition(),
+        takeDamage: (amount, direction) => {
+            if (CombatSystem?.damagePlayerFromNPC) {
+                CombatSystem.damagePlayerFromNPC(amount, direction);
+                return;
+            }
+
+            // Fallback - should rarely happen (only if NPC hits during init)
+            GameState.player.health = Math.max(0, GameState.player.health - amount);
+            combatUI.updateHealth(GameState.player.health, GAME_CONFIG.PLAYER.MAX_HEALTH);
+        },
+    };
+
+    CombatSystem = createCombatSystem(Player, World3D.scene, PlayerCamera, GameState, combatUI, {
+        npcSystem: NPCSystem,
+        playerProxy: NPCPlayerProxy,
+    });
 
     // Create replay system
     ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
@@ -257,6 +296,9 @@ function initThreeWorld() {
         Player.respawn(spawnPos);
         CombatSystem.reset();
     });
+
+    // Now spawn initial NPCs after everything is initialized
+    NPCSystem.spawn(null, initialNPCCount);
 
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
 
@@ -383,6 +425,14 @@ function update(dt) {
     // Update LOD system based on camera position
     if (Buildings && World3D && GraphicsState.currentPreset) {
         Buildings.updateLOD(World3D.camera.position, GraphicsState.currentPreset);
+    }
+
+    // Update NPC System
+    if (NPCSystem && Player) {
+        NPCSystem.update(dt, {
+            player: NPCPlayerProxy,
+            camera: World3D.camera,
+        });
     }
 
     // Update debug stats
