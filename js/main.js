@@ -75,6 +75,15 @@ const GraphicsState = {
 };
 
 // ============================================
+// DEBUG STATE
+// ============================================
+const DebugState = {
+    enabled: false,
+    updateInterval: 0.5, // Update every 0.5 seconds
+    timeSinceLastUpdate: 0,
+};
+
+// ============================================
 // DOM ELEMENTS
 // ============================================
 const UI = {
@@ -104,6 +113,18 @@ const UI = {
         fpsValue: document.getElementById('fpsValue'),
         presetButtons: null, // Will be populated later
         autoDowngradeToggle: document.getElementById('autoDowngradeToggle'),
+        debugStatsToggle: document.getElementById('debugStatsToggle'),
+    },
+    debug: {
+        panel: document.getElementById('debugStats'),
+        triangles: document.getElementById('debugTriangles'),
+        drawCalls: document.getElementById('debugDrawCalls'),
+        textures: document.getElementById('debugTextures'),
+        geometries: document.getElementById('debugGeometries'),
+        buildings: document.getElementById('debugBuildings'),
+        lodHigh: document.getElementById('debugLODHigh'),
+        lodMedium: document.getElementById('debugLODMedium'),
+        lodLow: document.getElementById('debugLODLow'),
     },
 };
 
@@ -234,6 +255,20 @@ function update(dt) {
         Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
     }
     
+    // Update LOD system based on camera position
+    if (Buildings && World3D && GraphicsState.currentPreset) {
+        Buildings.updateLOD(World3D.camera.position, GraphicsState.currentPreset);
+    }
+    
+    // Update debug stats
+    if (DebugState.enabled) {
+        DebugState.timeSinceLastUpdate += dt;
+        if (DebugState.timeSinceLastUpdate >= DebugState.updateInterval) {
+            updateDebugStats();
+            DebugState.timeSinceLastUpdate = 0;
+        }
+    }
+    
     // Update HUD
     updateHUD();
 }
@@ -280,6 +315,43 @@ function updateHUD() {
     
     // Update mission
     UI.hud.missionName.textContent = GameState.player.currentMission;
+}
+
+// ============================================
+// DEBUG STATS UPDATE
+// ============================================
+function updateDebugStats() {
+    if (!World3D || !Buildings) return;
+    
+    // Get renderer info
+    const info = World3D.getRendererInfo();
+    
+    // Get building LOD counts
+    const instancedMeshes = Buildings.getInstancedMeshes();
+    const lodHigh = instancedMeshes.high.count;
+    const lodMedium = instancedMeshes.medium.count;
+    const lodLow = instancedMeshes.low.count;
+    
+    // Update UI
+    UI.debug.triangles.textContent = info.triangles.toLocaleString();
+    UI.debug.drawCalls.textContent = info.drawCalls;
+    UI.debug.textures.textContent = info.textures;
+    UI.debug.geometries.textContent = info.geometries;
+    UI.debug.buildings.textContent = Buildings.getBuildingsCount();
+    UI.debug.lodHigh.textContent = lodHigh;
+    UI.debug.lodMedium.textContent = lodMedium;
+    UI.debug.lodLow.textContent = lodLow;
+}
+
+function toggleDebugStats(enabled) {
+    DebugState.enabled = enabled;
+    if (enabled) {
+        UI.debug.panel.classList.remove('hidden');
+        updateDebugStats();
+    } else {
+        UI.debug.panel.classList.add('hidden');
+    }
+    localStorage.setItem('debugStats', enabled);
 }
 
 // ============================================
@@ -535,6 +607,21 @@ function setupGraphicsMenuHandlers() {
             GraphicsState.autoDowngradeEnabled = autoDowngradeToggle.checked;
             localStorage.setItem('autoDowngrade', autoDowngradeToggle.checked);
             console.log(`Auto-downgrade ${autoDowngradeToggle.checked ? 'enabled' : 'disabled'}`);
+        });
+    }
+    
+    // Setup debug stats toggle
+    const debugStatsToggle = UI.settings.debugStatsToggle;
+    if (debugStatsToggle) {
+        // Load saved state
+        const savedDebugStats = localStorage.getItem('debugStats');
+        DebugState.enabled = savedDebugStats === 'true';
+        debugStatsToggle.checked = DebugState.enabled;
+        toggleDebugStats(DebugState.enabled);
+        
+        debugStatsToggle.addEventListener('change', () => {
+            toggleDebugStats(debugStatsToggle.checked);
+            console.log(`Debug stats ${debugStatsToggle.checked ? 'enabled' : 'disabled'}`);
         });
     }
     

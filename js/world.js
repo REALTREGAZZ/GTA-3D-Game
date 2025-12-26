@@ -105,7 +105,26 @@ export function createWorld({ canvas, autoResize = true } = {}) {
             scene.fog.far = fogFar;
         }
 
+        // Update camera near/far clipping planes
+        if (typeof preset.cameraNear !== 'undefined') {
+            camera.near = preset.cameraNear;
+        }
+        if (typeof preset.cameraFar !== 'undefined') {
+            camera.far = preset.cameraFar;
+        }
+        camera.updateProjectionMatrix();
+
         console.log(`Applied graphics settings for preset: ${preset.name}`);
+    }
+
+    function getRendererInfo() {
+        return {
+            triangles: renderer.info.render.triangles,
+            drawCalls: renderer.info.render.calls,
+            textures: renderer.info.memory.textures,
+            geometries: renderer.info.memory.geometries,
+            programs: renderer.info.programs?.length || 0,
+        };
     }
 
     return {
@@ -119,5 +138,6 @@ export function createWorld({ canvas, autoResize = true } = {}) {
         resize,
         dispose,
         applyGraphicsSettings,
+        getRendererInfo,
     };
 }
