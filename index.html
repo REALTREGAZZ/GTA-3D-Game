@@ -13,17 +13,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap" rel="stylesheet">
-
-<!-- Import Map para Three.js desde CDN -->
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-  }
-}
-</script>
-
-<!-- Main CSS -->
+    
+    <!-- IMPORT MAP PARA THREE.JS - CRÍTICO -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+    </script>
+    
+    <!-- Main CSS -->
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
@@ -83,51 +83,13 @@
         <div class="hud-section time-section">
             <div class="game-time" id="gameTime">12:00</div>
         </div>
+        
+        <!-- FPS Counter -->
+        <div class="hud-section fps-section">
+            <div class="fps-counter" id="fpsCounter">60 FPS</div>
+        </div>
     </div>
     
-    <!-- FPS Counter -->
-    <div id="fpsCounter" class="fps-counter">
-        <div class="fps-value" id="fpsValue">60</div>
-        <div class="fps-label">FPS</div>
-    </div>
-
-    <!-- Debug Stats Panel -->
-    <div id="debugStats" class="debug-stats hidden">
-        <div class="debug-title">DEBUG STATS</div>
-        <div class="debug-stat">
-            <span class="stat-label">Triángulos:</span>
-            <span class="stat-value" id="debugTriangles">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">Draw Calls:</span>
-            <span class="stat-value" id="debugDrawCalls">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">Texturas:</span>
-            <span class="stat-value" id="debugTextures">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">Geometrías:</span>
-            <span class="stat-value" id="debugGeometries">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">Edificios:</span>
-            <span class="stat-value" id="debugBuildings">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">LOD Alto:</span>
-            <span class="stat-value" id="debugLODHigh">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">LOD Medio:</span>
-            <span class="stat-value" id="debugLODMedium">0</span>
-        </div>
-        <div class="debug-stat">
-            <span class="stat-label">LOD Bajo:</span>
-            <span class="stat-value" id="debugLODLow">0</span>
-        </div>
-    </div>
-
     <!-- Pause Menu -->
     <div id="pauseMenu" class="menu-overlay hidden">
         <div class="menu-container">
@@ -139,57 +101,6 @@
                 <button class="menu-button" id="loadBtn">Cargar Partida</button>
                 <button class="menu-button" id="exitBtn">Salir al Menú Principal</button>
             </nav>
-        </div>
-    </div>
-
-    <!-- Graphics Settings Menu -->
-    <div id="graphicsMenu" class="menu-overlay hidden">
-        <div class="menu-container">
-            <h1 class="menu-title">CONFIGURACIÓN GRÁFICA</h1>
-            <div class="settings-content">
-                <div class="settings-section">
-                    <h3 class="settings-subtitle">Presets de Calidad</h3>
-                    <div class="preset-buttons">
-                        <button class="preset-button" data-preset="ULTRA">
-                            <span class="preset-name">ULTRA</span>
-                            <span class="preset-desc">PC Gamer • Sombras 4K • 45 edificios</span>
-                        </button>
-                        <button class="preset-button" data-preset="HIGH">
-                            <span class="preset-name">HIGH</span>
-                            <span class="preset-desc">PC Alto • Sombras 2K • 40 edificios</span>
-                        </button>
-                        <button class="preset-button active" data-preset="MEDIUM">
-                            <span class="preset-name">MEDIUM</span>
-                            <span class="preset-desc">PC Medio • Sombras 1K • 30 edificios</span>
-                        </button>
-                        <button class="preset-button" data-preset="LOW">
-                            <span class="preset-name">LOW</span>
-                            <span class="preset-desc">PC Bajo • Sombras 512 • 15 edificios</span>
-                        </button>
-                        <button class="preset-button" data-preset="POTATO">
-                            <span class="preset-name">POTATO</span>
-                            <span class="preset-desc">PC Mínimo • Sin efectos • 8 edificios</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="settings-section">
-                    <h3 class="settings-subtitle">Auto-Optimización</h3>
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="autoDowngradeToggle" checked>
-                        <span>Ajustar calidad automáticamente según FPS</span>
-                    </label>
-                    <p class="settings-hint">El juego reducirá la calidad si FPS &lt; 45 por 5 segundos</p>
-                </div>
-                <div class="settings-section">
-                    <h3 class="settings-subtitle">Depuración</h3>
-                    <label class="settings-checkbox">
-                        <input type="checkbox" id="debugStatsToggle">
-                        <span>Mostrar estadísticas de rendimiento</span>
-                    </label>
-                    <p class="settings-hint">Muestra triángulos, draw calls, LOD, y más</p>
-                </div>
-            </div>
-            <button class="menu-button back-button" id="backToMainMenuBtn">Volver</button>
         </div>
     </div>
     
