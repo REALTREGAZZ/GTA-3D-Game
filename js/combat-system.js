@@ -163,10 +163,10 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
 
         // Play effects
         playSound('MELEE_IMPACT');
-        camera.addShake(GAME_CONFIG.COMBAT.MELEE_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.MELEE_SHAKE_DURATION);
+        camera?.addShake?.(GAME_CONFIG.COMBAT.MELEE_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.MELEE_SHAKE_DURATION);
 
         // Create impact particles
-        createImpactParticles(hitPoint, 'MELEE');
+
 
         // Create damage number
         createDamageNumber(hitPoint, damage, 'MELEE');
@@ -208,10 +208,14 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
 
         // Play effects
         playSound('RANGED_SHOT');
-        camera.addShake(GAME_CONFIG.COMBAT.RANGED_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.RANGED_SHAKE_DURATION);
+        camera?.addShake?.(GAME_CONFIG.COMBAT.RANGED_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.RANGED_SHAKE_DURATION);
 
         // Camera recoil (pitch down)
-        camera.recoilPitch = GAME_CONFIG.COMBAT.RANGED_RECOIL_PITCH;
+        if (camera?.state) {
+            camera.state.recoilPitch = GAME_CONFIG.COMBAT.RANGED_RECOIL_PITCH;
+        } else if (camera) {
+            camera.recoilPitch = GAME_CONFIG.COMBAT.RANGED_RECOIL_PITCH;
+        }
 
         // Update stats
         state.currentCombo++;

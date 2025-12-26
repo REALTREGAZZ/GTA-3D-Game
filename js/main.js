@@ -233,7 +233,7 @@ function initThreeWorld() {
         screenFlash: CombatUI.screenFlash,
     };
 
-    CombatSystem = createCombatSystem(Player, World3D.scene, World3D.camera, GameState, combatUI);
+    CombatSystem = createCombatSystem(Player, World3D.scene, PlayerCamera, GameState, combatUI);
 
     // Create replay system
     ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
@@ -271,12 +271,14 @@ function initThreeWorld() {
 
     console.log('--- World Initialization Debug ---');
     console.log('World3D:', World3D);
-    console.log('Terrain:', Terrain);
-    console.log('Buildings:', Buildings);
+    console.log('Terrain created:', Terrain?.mesh);
+    console.log('Buildings created:', Buildings?.group);
+    console.log('World renderer:', World3D?.renderer);
     console.log('Player:', Player);
     console.log('Camera:', World3D.camera);
     console.log('Camera Position:', World3D.camera.position);
     console.log('Scene:', World3D.scene);
+    console.log('Scene children count:', World3D.scene?.children?.length);
     console.log('---------------------------------');
 }
 
@@ -482,29 +484,32 @@ function toggleDebugStats(enabled) {
 // ============================================
 function updateFpsCounter(deltaTime) {
     if (deltaTime <= 0) return;
-    
+
     const fps = 1 / deltaTime;
-    
+
     // Add to history
     GraphicsState.fpsHistory.push(fps);
     if (GraphicsState.fpsHistory.length > GraphicsState.maxFpsHistoryLength) {
         GraphicsState.fpsHistory.shift();
     }
-    
+
     // Calculate average FPS
     const avgFps = GraphicsState.fpsHistory.reduce((sum, f) => sum + f, 0) / GraphicsState.fpsHistory.length;
-    
-    // Update display
-    UI.settings.fpsValue.textContent = Math.round(avgFps);
-    
-    // Update color based on FPS
-    UI.settings.fpsValue.classList.remove('good', 'medium', 'bad');
-    if (avgFps >= 60) {
-        UI.settings.fpsValue.classList.add('good');
-    } else if (avgFps >= 30) {
-        UI.settings.fpsValue.classList.add('medium');
-    } else {
-        UI.settings.fpsValue.classList.add('bad');
+
+    // Update FPS counter display (try both fpsValue and fpsCounter elements)
+    const fpsElement = UI.settings.fpsValue || UI.settings.fpsCounter || document.getElementById('fpsValue') || document.getElementById('fpsCounter');
+    if (fpsElement) {
+        fpsElement.textContent = `${Math.round(avgFps)} FPS`;
+        
+        // Update color based on FPS
+        fpsElement.classList.remove('good', 'medium', 'bad');
+        if (avgFps >= 60) {
+            fpsElement.classList.add('good');
+        } else if (avgFps >= 30) {
+            fpsElement.classList.add('medium');
+        } else {
+            fpsElement.classList.add('bad');
+        }
     }
 }
 
