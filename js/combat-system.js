@@ -6,7 +6,9 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG } from './config.js';
 
-export function createCombatSystem(player, scene, camera, gameState, ui) {
+export function createCombatSystem(player, scene, camera, gameState, ui, options = {}) {
+    const { npcSystem = null, playerProxy = null } = options;
+
     const state = {
         // Weapon state
         currentWeapon: 'MELEE', // 'MELEE' or 'RANGED'
@@ -39,6 +41,20 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
 
     // Death event recording for replay
     let deathEvent = null;
+
+    const getAllNPCs = () => {
+        if (npcSystem?.getAllActiveNPCs) return npcSystem.getAllActiveNPCs();
+        if (npcSystem?.state?.active) return npcSystem.state.active;
+        return [];
+    };
+
+    const getNPCsNear = (position, radius) => {
+        if (npcSystem?.getNPCsNear) return npcSystem.getNPCsNear(position, radius);
+        const npcs = getAllNPCs();
+        return npcs.filter((npc) => npc?.mesh?.position?.distanceTo(position) < radius);
+    };
+
+    const npcPlayer = playerProxy;
 
     function initAudio() {
         if (!audioContext) {
@@ -141,6 +157,7 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
 
         const damage = GAME_CONFIG.COMBAT.MELEE_DAMAGE;
         const knockback = GAME_CONFIG.COMBAT.MELEE_KNOCKBACK;
+        const meleeRange = GAME_CONFIG.COMBAT.MELEE_RANGE || 2.5;
 
         // Get player direction
         const playerPos = player.getPosition();
@@ -151,37 +168,72 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
             Math.sin(playerRotation),
             0,
             Math.cos(playerRotation)
-        );
+        ).normalize();
 
-        // Simulate hit on player (self-damage for demo)
-        const hitPoint = playerPos.clone().add(attackDir.clone().multiplyScalar(1.5));
-        hitPoint.y += 1.0;
+        const candidates = getNPCsNear(playerPos, meleeRange + 1.5);
 
-        // Apply damage and knockback to self (for demo)
-        applyDamage(damage, attackDir.clone().negate(), 'MELEE');
-        applyKnockback(attackDir.clone().negate(), knockback);
+        let bestTarget = null;
+        let bestScore = -Infinity;
 
-        // Play effects
+        for (let i = 0; i < candidates.length; i++) {
+            const npc = candidates[i];
+            if (!npc?.state?.active || npc?.state?.state === 'DEAD') continue;
+
+            const toNPC = npc.mesh.position.clone().sub(playerPos);
+            toNPC.y = 0;
+            const dist = toNPC.length();
+            if (dist <= 0.0001 || dist > meleeRange + 0.4) continue;
+
+            const dirTo = toNPC.clone().normalize();
+            const facing = dirTo.dot(attackDir);
+
+            // Only hit things generally in front of player
+            if (facing < 0.25) continue;
+
+            const score = facing * 2.0 - dist / meleeRange;
+            if (score > bestScore) {
+                bestScore = score;
+                bestTarget = npc;
+            }
+        }
+
+        // Set cooldown even if we miss (swing animation)
+        state.meleeCooldown = GAME_CONFIG.COMBAT.MELEE_COOLDOWN;
+
+        // Play effects (always)
         playSound('MELEE_IMPACT');
         camera?.addShake?.(GAME_CONFIG.COMBAT.MELEE_SHAKE_INTENSITY, GAME_CONFIG.COMBAT.MELEE_SHAKE_DURATION);
 
-        // Create impact particles
+        // Player recoil animation
+        if (player?.state) {
+            player.state.recoil = GAME_CONFIG.COMBAT.MELEE_RECOIL;
+        } else {
+            player.recoil = GAME_CONFIG.COMBAT.MELEE_RECOIL;
+        }
 
+        if (!bestTarget) {
+            return true;
+        }
+
+        const hitPoint = bestTarget.mesh.position.clone();
+        hitPoint.y += 1.0;
+
+        // Damage + aggro
+        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
+
+        // Knockback on NPC (if it supports velocity)
+        if (bestTarget.state?.velocity) {
+            bestTarget.state.velocity.add(attackDir.clone().multiplyScalar(knockback * 0.35));
+        }
 
         // Create damage number
         createDamageNumber(hitPoint, damage, 'MELEE');
-
-        // Player recoil animation
-        player.recoil = GAME_CONFIG.COMBAT.MELEE_RECOIL;
 
         // Update stats
         state.currentCombo++;
         if (state.currentCombo > state.bestCombo) state.bestCombo = state.currentCombo;
         state.hitsConnected++;
         state.totalDamageDealt += damage;
-
-        // Set cooldown
-        state.meleeCooldown = GAME_CONFIG.COMBAT.MELEE_COOLDOWN;
 
         return true;
     }
@@ -337,7 +389,11 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
 
     function applyDamage(amount, direction, type) {
         // Flash player material
-        player.flashTime = GAME_CONFIG.COMBAT.IMPACT_FLASH_DURATION;
+        if (player?.state) {
+            player.state.flashTime = GAME_CONFIG.COMBAT.IMPACT_FLASH_DURATION;
+        } else {
+            player.flashTime = GAME_CONFIG.COMBAT.IMPACT_FLASH_DURATION;
+        }
 
         // Apply damage
         gameState.player.health -= amount;
@@ -488,24 +544,39 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
             const move = bullet.direction.clone().multiplyScalar(bullet.speed * deltaTime);
             bullet.mesh.position.add(move);
 
-            // Check collision with player
-            const dist = bullet.mesh.position.distanceTo(player.mesh.position);
-            if (dist < 1.0) {
-                // Hit!
-                applyDamage(bullet.damage, bullet.direction.clone().negate(), 'RANGED');
-                applyKnockback(bullet.direction.clone().negate(), bullet.knockback);
+            // Check collision with NPCs first
+            const nearNPCs = getNPCsNear(bullet.mesh.position, 1.5);
+            let hitSomething = false;
 
-                playSound('RANGED_IMPACT');
-                createImpactParticles(bullet.mesh.position.clone(), 'RANGED');
-                createDamageNumber(bullet.mesh.position.clone(), bullet.damage, 'RANGED');
+            for (let j = 0; j < nearNPCs.length; j++) {
+                const npc = nearNPCs[j];
+                if (!npc?.state?.active || npc?.state?.state === 'DEAD') continue;
 
-                // Update stats
-                state.currentCombo++;
-                if (state.currentCombo > state.bestCombo) state.bestCombo = state.currentCombo;
-                state.hitsConnected++;
-                state.totalDamageDealt += bullet.damage;
+                const dist = bullet.mesh.position.distanceTo(npc.mesh.position);
+                if (dist < 1.0) {
+                    npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() });
 
+                    if (npc.state?.velocity) {
+                        npc.state.velocity.add(bullet.direction.clone().multiplyScalar(bullet.knockback * 0.35));
+                    }
+
+                    playSound('RANGED_IMPACT');
+                    createImpactParticles(bullet.mesh.position.clone(), 'RANGED');
+                    createDamageNumber(bullet.mesh.position.clone(), bullet.damage, 'RANGED');
+
+                    state.currentCombo++;
+                    if (state.currentCombo > state.bestCombo) state.bestCombo = state.currentCombo;
+                    state.hitsConnected++;
+                    state.totalDamageDealt += bullet.damage;
+
+                    hitSomething = true;
+                    break;
+                }
+            }
+
+            if (hitSomething) {
                 toRemove.push(i);
+                continue;
             }
         }
 
@@ -624,6 +695,11 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
         return deathEvent;
     }
 
+    function damagePlayerFromNPC(amount, direction) {
+        if (gameState.isReplaying) return;
+        applyDamage(amount, direction || new THREE.Vector3(1, 0, 0), 'NPC');
+    }
+
     return {
         state,
         performMeleeAttack,
@@ -637,5 +713,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui) {
         reset,
         getDeathEvent,
         playSound,
+        damagePlayerFromNPC,
     };
 }
