@@ -1,5 +1,5 @@
 /**
- * Simple buildings (BoxGeometry) + basic AABB colliders.
+ * Buildings with InstancedMesh for optimal performance + LOD system
  */
 
 import * as THREE from 'three';
@@ -53,64 +53,38 @@ function createBuildingTexture({
     return texture;
 }
 
-export function createBuilding({
-    width = 8,
-    depth = 8,
-    height = 20,
-    position = new THREE.Vector3(),
-    material = null,
-} = {}) {
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const mesh = new THREE.Mesh(
-        geometry,
-        material ||
-            new THREE.MeshStandardMaterial({
-                color: 0x777777,
-                roughness: 0.9,
-                metalness: 0.0,
-            }),
-    );
-
-    mesh.position.copy(position);
-    mesh.position.y = height / 2;
-
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
-    return mesh;
+// LOD Geometries: High, Medium, Low detail
+function createLODGeometries() {
+    return {
+        high: new THREE.BoxGeometry(1, 1, 1, 4, 8, 4),   // Detailed segments
+        medium: new THREE.BoxGeometry(1, 1, 1, 2, 4, 2), // Medium segments
+        low: new THREE.BoxGeometry(1, 1, 1, 1, 1, 1),    // Simple box
+    };
 }
 
-function computeColliders(group) {
-    group.updateMatrixWorld(true);
-
-    const colliders = [];
-    group.traverse(obj => {
-        if (!obj.isMesh) return;
-
-        const box = new THREE.Box3().setFromObject(obj);
-        colliders.push({
-            mesh: obj,
-            box,
-        });
-    });
-
-    return colliders;
-}
-
-export function updateBuildingColliders(colliders) {
-    for (const collider of colliders) {
-        collider.mesh.updateMatrixWorld(true);
-        collider.box.setFromObject(collider.mesh);
+// Building data structure
+class BuildingData {
+    constructor(x, y, z, width, height, depth) {
+        this.position = new THREE.Vector3(x, y, z);
+        this.width = width;
+        this.height = height;
+        this.depth = depth;
+        this.matrix = new THREE.Matrix4();
+        
+        // Compute matrix for instancing
+        this.matrix.makeScale(width, height, depth);
+        this.matrix.setPosition(x, y + height / 2, z);
+        
+        // For collision detection
+        this.box = new THREE.Box3(
+            new THREE.Vector3(x - width / 2, 0, z - depth / 2),
+            new THREE.Vector3(x + width / 2, height, z + depth / 2)
+        );
     }
-}
-
-export function sphereIntersectsColliders(position, radius, colliders) {
-    for (const { box } of colliders) {
-        if (box.distanceToPoint(position) <= radius) {
-            return true;
-        }
+    
+    getDistanceToPoint(point) {
+        return this.position.distanceTo(point);
     }
-    return false;
 }
 
 export function createBuildings({
@@ -120,72 +94,189 @@ export function createBuildings({
 } = {}) {
     const group = new THREE.Group();
     group.name = 'Buildings';
-
+    
     const texture = createBuildingTexture();
     if (texture) {
         texture.repeat.set(1, 1);
     }
-
+    
     const sharedMaterial = new THREE.MeshStandardMaterial({
         color: 0x8a8a8a,
         roughness: 0.85,
         metalness: 0.05,
         map: texture || null,
     });
-
+    
+    // Create LOD geometries
+    const lodGeometries = createLODGeometries();
+    
+    // Create InstancedMeshes for each LOD level
+    const maxInstances = 50; // Max buildings we might ever have
+    const instancedMeshes = {
+        high: new THREE.InstancedMesh(lodGeometries.high, sharedMaterial, maxInstances),
+        medium: new THREE.InstancedMesh(lodGeometries.medium, sharedMaterial, maxInstances),
+        low: new THREE.InstancedMesh(lodGeometries.low, sharedMaterial, maxInstances),
+    };
+    
+    // Setup shadow casting
+    instancedMeshes.high.castShadow = true;
+    instancedMeshes.high.receiveShadow = true;
+    instancedMeshes.medium.castShadow = true;
+    instancedMeshes.medium.receiveShadow = true;
+    instancedMeshes.low.castShadow = false; // Far buildings don't need shadows
+    instancedMeshes.low.receiveShadow = false;
+    
+    // Initially hide all instances
+    instancedMeshes.high.count = 0;
+    instancedMeshes.medium.count = 0;
+    instancedMeshes.low.count = 0;
+    
+    // Add to group
+    group.add(instancedMeshes.high);
+    group.add(instancedMeshes.medium);
+    group.add(instancedMeshes.low);
+    
     const half = mapSize / 2 - margin;
-
+    let buildingsData = [];
+    
     function generateBuildings(targetCount) {
-        // Clear existing buildings
-        while (group.children.length > 0) {
-            const child = group.children[0];
-            group.remove(child);
-            if (child.geometry) child.geometry.dispose();
-        }
-
-        // Generate new buildings
+        buildingsData = [];
+        
+        // Generate building data
         for (let i = 0; i < targetCount; i++) {
             const width = THREE.MathUtils.randFloat(6, 18);
             const depth = THREE.MathUtils.randFloat(6, 18);
             const height = THREE.MathUtils.randFloat(10, 55);
-
+            
             const x = THREE.MathUtils.randFloat(-half, half);
             const z = THREE.MathUtils.randFloat(-half, half);
-
-            // Keep a small open area near the center for future player spawn.
+            
+            // Keep a small open area near the center for player spawn
             const centerClearRadius = 22;
             if (Math.hypot(x, z) < centerClearRadius) {
                 i--;
                 continue;
             }
-
-            const mesh = createBuilding({
-                width,
-                depth,
-                height,
-                position: new THREE.Vector3(x, 0, z),
-                material: sharedMaterial,
-            });
-
-            mesh.name = `Building_${i}`;
-            group.add(mesh);
+            
+            buildingsData.push(new BuildingData(x, 0, z, width, height, depth));
         }
-
-        return computeColliders(group);
+        
+        // Initial LOD update will set up instances
+        return buildingsData;
     }
-
-    // Initial generation
-    let colliders = generateBuildings(count);
-
+    
+    // Generate initial buildings
+    generateBuildings(count);
+    
+    // Update LOD based on camera position
+    function updateLOD(cameraPosition, preset) {
+        if (!preset) return;
+        
+        const lodNear = preset.lodNear || 30;
+        const lodMedium = preset.lodMedium || 80;
+        const lodFar = preset.lodFar || 180;
+        const cullingDistance = preset.frustumCullingDistance || 250;
+        
+        let highCount = 0;
+        let mediumCount = 0;
+        let lowCount = 0;
+        
+        // Sort buildings by LOD level and update matrices
+        for (let i = 0; i < buildingsData.length; i++) {
+            const building = buildingsData[i];
+            const distance = building.getDistanceToPoint(cameraPosition);
+            
+            // Frustum culling - skip buildings too far away
+            if (distance > cullingDistance) {
+                continue;
+            }
+            
+            // Assign to appropriate LOD level
+            if (distance < lodNear) {
+                instancedMeshes.high.setMatrixAt(highCount, building.matrix);
+                highCount++;
+            } else if (distance < lodMedium) {
+                instancedMeshes.medium.setMatrixAt(mediumCount, building.matrix);
+                mediumCount++;
+            } else if (distance < lodFar) {
+                instancedMeshes.low.setMatrixAt(lowCount, building.matrix);
+                lowCount++;
+            }
+            // Beyond lodFar but within culling distance: use low LOD
+            else {
+                instancedMeshes.low.setMatrixAt(lowCount, building.matrix);
+                lowCount++;
+            }
+        }
+        
+        // Update instance counts
+        instancedMeshes.high.count = highCount;
+        instancedMeshes.medium.count = mediumCount;
+        instancedMeshes.low.count = lowCount;
+        
+        // Mark matrices as needing update
+        if (highCount > 0) instancedMeshes.high.instanceMatrix.needsUpdate = true;
+        if (mediumCount > 0) instancedMeshes.medium.instanceMatrix.needsUpdate = true;
+        if (lowCount > 0) instancedMeshes.low.instanceMatrix.needsUpdate = true;
+    }
+    
+    // Collision detection
+    function sphereIntersectsBuildings(position, radius) {
+        for (const building of buildingsData) {
+            if (building.box.distanceToPoint(position) <= radius) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // Get colliders for backwards compatibility
+    function getColliders() {
+        return buildingsData.map(building => ({
+            box: building.box,
+            mesh: null, // No individual mesh anymore
+        }));
+    }
+    
+    // Regenerate buildings with new count
     function regenerateBuildings(newCount) {
-        colliders = generateBuildings(newCount);
-        return colliders;
+        generateBuildings(newCount);
+        return getColliders();
     }
-
+    
+    // Dispose resources
+    function dispose() {
+        lodGeometries.high.dispose();
+        lodGeometries.medium.dispose();
+        lodGeometries.low.dispose();
+        sharedMaterial.dispose();
+        if (texture) texture.dispose();
+    }
+    
     return {
         group,
-        colliders,
-        updateColliders: () => updateBuildingColliders(colliders),
+        colliders: getColliders(),
+        updateColliders: () => {}, // No-op for instanced meshes
         regenerateBuildings,
+        updateLOD,
+        sphereIntersectsBuildings,
+        dispose,
+        // Expose for stats/debugging
+        getBuildingsCount: () => buildingsData.length,
+        getInstancedMeshes: () => instancedMeshes,
     };
+}
+
+// Legacy collision functions for backwards compatibility
+export function updateBuildingColliders(colliders) {
+    // No-op for instanced meshes
+}
+
+export function sphereIntersectsColliders(position, radius, colliders) {
+    for (const { box } of colliders) {
+        if (box.distanceToPoint(position) <= radius) {
+            return true;
+        }
+    }
+    return false;
 }
