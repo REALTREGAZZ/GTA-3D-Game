@@ -95,12 +95,14 @@ const OverlaySystem = {
     show(text, duration = 3.0) {
         if (this.isShowing) return; // No superponer textos
         
+        const element = document.getElementById('satiricalText');
+        if (!element) return; // Safety check
+        
         this.isShowing = true;
         this.currentText = text;
         this.duration = duration;
         this.timer = duration;
         
-        const element = document.getElementById('satiricalText');
         element.textContent = text;
         
         // Resetear animación
@@ -119,6 +121,9 @@ const OverlaySystem = {
         }
     },
 };
+
+// Make OverlaySystem globally accessible for other modules
+window.OverlaySystem = OverlaySystem;
 
 function clamp01(value) {
     return Math.max(0, Math.min(1, value));
@@ -636,35 +641,38 @@ function update(dt, rawDt = dt) {
 
 // Function to update overlay triggers
 function updateOverlayTriggers() {
-    if (!NPCSystem || !OverlaySystem.isShowing) return;
+    if (!NPCSystem || OverlaySystem.isShowing) return;
     
     const activeNpcs = NPCSystem.state.active;
-    let flyingNpcs = 0;
+    if (!activeNpcs || activeNpcs.length === 0) return;
     
-    // Contar NPCs volando (velocity > 20)
+    let ragdollCount = 0;
+    let maxVelocity = 0;
+    
+    // Count ragdoll NPCs and find max velocity
     for (let npc of activeNpcs) {
-        if (npc.velocity && npc.velocity.length() > 20) {
-            flyingNpcs++;
+        if (npc.state && npc.state.isRagdoll) {
+            ragdollCount++;
         }
+        const vel = npc.state?.velocity?.length() || 0;
+        if (vel > maxVelocity) maxVelocity = vel;
     }
     
-    // Si 3+ NPCs volando, mostrar texto de caos
-    if (flyingNpcs >= 3 && !OverlaySystem.isShowing) {
+    // Show chaos text if 3+ NPCs in ragdoll
+    if (ragdollCount >= 3) {
         const chaosText = SATIRICAL_TEXTS.CHAOS[
             Math.floor(Math.random() * SATIRICAL_TEXTS.CHAOS.length)
         ];
         OverlaySystem.show(chaosText, 2.5);
+        return;
     }
     
-    // Si un NPC tiene velocidad extrema
-    for (let npc of activeNpcs) {
-        if (npc.velocity && npc.velocity.length() > 20 && !OverlaySystem.isShowing) {
-            const velocityText = SATIRICAL_TEXTS.HIGH_VELOCITY[
-                Math.floor(Math.random() * SATIRICAL_TEXTS.HIGH_VELOCITY.length)
-            ];
-            OverlaySystem.show(velocityText, 2.0);
-            break; // Solo mostrar uno por frame
-        }
+    // Show high velocity text if any NPC is moving extremely fast
+    if (maxVelocity > 20) {
+        const velocityText = SATIRICAL_TEXTS.HIGH_VELOCITY[
+            Math.floor(Math.random() * SATIRICAL_TEXTS.HIGH_VELOCITY.length)
+        ];
+        OverlaySystem.show(velocityText, 2.0);
     }
 }
 
