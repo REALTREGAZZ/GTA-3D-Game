@@ -135,38 +135,57 @@ export function createBuildings({
 
     const half = mapSize / 2 - margin;
 
-    for (let i = 0; i < count; i++) {
-        const width = THREE.MathUtils.randFloat(6, 18);
-        const depth = THREE.MathUtils.randFloat(6, 18);
-        const height = THREE.MathUtils.randFloat(10, 55);
-
-        const x = THREE.MathUtils.randFloat(-half, half);
-        const z = THREE.MathUtils.randFloat(-half, half);
-
-        // Keep a small open area near the center for future player spawn.
-        const centerClearRadius = 22;
-        if (Math.hypot(x, z) < centerClearRadius) {
-            i--;
-            continue;
+    function generateBuildings(targetCount) {
+        // Clear existing buildings
+        while (group.children.length > 0) {
+            const child = group.children[0];
+            group.remove(child);
+            if (child.geometry) child.geometry.dispose();
         }
 
-        const mesh = createBuilding({
-            width,
-            depth,
-            height,
-            position: new THREE.Vector3(x, 0, z),
-            material: sharedMaterial,
-        });
+        // Generate new buildings
+        for (let i = 0; i < targetCount; i++) {
+            const width = THREE.MathUtils.randFloat(6, 18);
+            const depth = THREE.MathUtils.randFloat(6, 18);
+            const height = THREE.MathUtils.randFloat(10, 55);
 
-        mesh.name = `Building_${i}`;
-        group.add(mesh);
+            const x = THREE.MathUtils.randFloat(-half, half);
+            const z = THREE.MathUtils.randFloat(-half, half);
+
+            // Keep a small open area near the center for future player spawn.
+            const centerClearRadius = 22;
+            if (Math.hypot(x, z) < centerClearRadius) {
+                i--;
+                continue;
+            }
+
+            const mesh = createBuilding({
+                width,
+                depth,
+                height,
+                position: new THREE.Vector3(x, 0, z),
+                material: sharedMaterial,
+            });
+
+            mesh.name = `Building_${i}`;
+            group.add(mesh);
+        }
+
+        return computeColliders(group);
     }
 
-    const colliders = computeColliders(group);
+    // Initial generation
+    let colliders = generateBuildings(count);
+
+    function regenerateBuildings(newCount) {
+        colliders = generateBuildings(newCount);
+        return colliders;
+    }
 
     return {
         group,
         colliders,
         updateColliders: () => updateBuildingColliders(colliders),
+        regenerateBuildings,
     };
 }
