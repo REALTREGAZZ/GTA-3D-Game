@@ -91,7 +91,7 @@ export function createNPCSystem(config = {}) {
     }
 
     function update(dt, context = {}) {
-        const { player = null, camera = null } = context;
+        const { player = null, camera = null, feedback = null } = context;
 
         // Frustum culling helper (optional)
         let isInView = null;
@@ -121,6 +121,7 @@ export function createNPCSystem(config = {}) {
                 attackPlayerRadius,
                 fleePlayerRadius,
                 detectionRadius,
+                feedback,
             });
         }
 

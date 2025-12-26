@@ -36,6 +36,9 @@ const GameState = {
     isLoading: true,
     isReplaying: false,
 
+    // Global simulation time multiplier (hitstop uses this)
+    timeScale: 1.0,
+
     // Player State
     player: {
         health: GAME_CONFIG.PLAYER.MAX_HEALTH,
@@ -64,6 +67,120 @@ const GameState = {
     // Death callback for replay
     onDeath: null,
 };
+
+// ============================================
+// HITSTOP + SCREEN SHAKE (VISUAL FEEDBACK)
+// ============================================
+const HitstopState = {
+    freezeRemaining: 0,
+    recoveryRemaining: 0,
+};
+
+const ScreenShakeState = {
+    strength: 0,
+    timeRemaining: 0,
+    sampleTimer: 0,
+    currentOffset: new THREE.Vector3(),
+    targetOffset: new THREE.Vector3(),
+};
+
+function clamp01(value) {
+    return Math.max(0, Math.min(1, value));
+}
+
+function applyHitstop(intensity = 1.0) {
+    const i = clamp01(intensity);
+    const baseDuration = GAME_CONFIG.COMBAT.HITSTOP_DURATION;
+
+    const freezeDuration = baseDuration * (0.5 + 0.5 * i);
+
+    HitstopState.freezeRemaining = Math.max(HitstopState.freezeRemaining, freezeDuration);
+    HitstopState.recoveryRemaining = 0;
+    GameState.timeScale = 0;
+}
+
+function updateHitstop(rawDt) {
+    if (HitstopState.freezeRemaining > 0) {
+        HitstopState.freezeRemaining = Math.max(0, HitstopState.freezeRemaining - rawDt);
+        GameState.timeScale = 0;
+
+        if (HitstopState.freezeRemaining <= 0) {
+            HitstopState.recoveryRemaining = GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME;
+        }
+
+        return;
+    }
+
+    if (HitstopState.recoveryRemaining > 0) {
+        HitstopState.recoveryRemaining = Math.max(0, HitstopState.recoveryRemaining - rawDt);
+
+        const recoveryTime = Math.max(0.0001, GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME);
+        const linearT = clamp01(1 - (HitstopState.recoveryRemaining / recoveryTime));
+        GameState.timeScale = linearT * linearT;
+        return;
+    }
+
+    GameState.timeScale = 1.0;
+}
+
+function applyScreenShake(intensity = 1.0, duration = null) {
+    const i = clamp01(intensity);
+    const addedStrength = i * GAME_CONFIG.COMBAT.SCREEN_SHAKE_INTENSITY;
+    const addedDuration = Math.max(0, duration ?? GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
+
+    ScreenShakeState.strength += addedStrength;
+    ScreenShakeState.timeRemaining += addedDuration;
+    ScreenShakeState.sampleTimer = 0;
+}
+
+function updateScreenShake(rawDt) {
+    const baseDuration = Math.max(0.0001, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
+
+    const decay = GAME_CONFIG.COMBAT.SCREEN_SHAKE_DECAY;
+    const frameDecay = Math.pow(decay, rawDt * 60);
+
+    ScreenShakeState.strength *= frameDecay;
+    ScreenShakeState.timeRemaining = Math.max(0, ScreenShakeState.timeRemaining - rawDt);
+
+    const envelope = Math.min(1.0, ScreenShakeState.timeRemaining / baseDuration);
+    const amp = ScreenShakeState.strength * envelope;
+
+    if (amp <= 0) {
+        ScreenShakeState.targetOffset.set(0, 0, 0);
+    }
+
+    const frequency = Math.max(0.01, GAME_CONFIG.COMBAT.SCREEN_SHAKE_FREQUENCY);
+    const sampleInterval = 1 / frequency;
+
+    ScreenShakeState.sampleTimer -= rawDt;
+    if (ScreenShakeState.sampleTimer <= 0) {
+        ScreenShakeState.sampleTimer = sampleInterval;
+
+        if (amp > 0) {
+            ScreenShakeState.targetOffset.set(
+                (Math.random() - 0.5) * 2 * amp,
+                (Math.random() - 0.5) * 2 * amp,
+                (Math.random() - 0.5) * 2 * amp
+            );
+        } else {
+            ScreenShakeState.targetOffset.set(0, 0, 0);
+        }
+    }
+
+    const smoothingPerFrame = 0.35;
+    const smoothing = 1 - Math.pow(1 - smoothingPerFrame, rawDt * 60);
+    ScreenShakeState.currentOffset.lerp(ScreenShakeState.targetOffset, smoothing);
+
+    if (ScreenShakeState.timeRemaining <= 0 && ScreenShakeState.currentOffset.lengthSq() < 1e-6) {
+        ScreenShakeState.strength = 0;
+        ScreenShakeState.currentOffset.set(0, 0, 0);
+        ScreenShakeState.targetOffset.set(0, 0, 0);
+        ScreenShakeState.sampleTimer = 0;
+    }
+}
+
+GameState.applyHitstop = applyHitstop;
+GameState.applyScreenShake = applyScreenShake;
 
 // ============================================
 // THREE.JS WORLD STATE
@@ -361,8 +478,14 @@ function gameLoop(currentTime) {
     // Update FPS counter
     updateFpsCounter(deltaTime);
 
+    // Hitstop + shake updates are driven by *real* frame time (raw delta)
+    updateHitstop(deltaTime);
+    updateScreenShake(deltaTime);
+
+    const scaledDeltaTime = deltaTime * GameState.timeScale;
+
     if (!GameState.isPaused) {
-        update(deltaTime);
+        update(scaledDeltaTime, deltaTime);
 
         // Check for auto-downgrade/upgrade every 2 seconds
         if (currentTime - GraphicsState.lastFpsCheckTime > 2000) {
@@ -379,42 +502,46 @@ function gameLoop(currentTime) {
 // ============================================
 // UPDATE FUNCTION
 // ============================================
-function update(dt) {
-    // Update world time
-    updateWorldTime(dt);
+function update(dt, rawDt = dt) {
+    let simDt = dt;
 
     // Update replay system (if active)
     if (GameState.isReplaying && ReplaySystem) {
-        ReplaySystem.update(dt);
+        ReplaySystem.update(rawDt);
         // Still update camera during replay
         if (PlayerCamera) {
-            PlayerCamera.update(dt, Mouse);
+            PlayerCamera.update(rawDt, Mouse);
         }
         return;
     }
 
-    // Update combat system
+    // Combat can trigger hitstop mid-frame (e.g. bullet impacts). If that happens,
+    // we recompute simDt so the rest of the simulation freezes immediately.
     if (CombatSystem) {
-        CombatSystem.update(dt);
+        CombatSystem.update(simDt);
+        simDt = rawDt * GameState.timeScale;
     }
 
-    // Update player
+    // Update world time (scaled)
+    updateWorldTime(simDt);
+
+    // Update player (scaled)
     if (Player && Buildings) {
         // Get terrain height at player position
         const playerPos = Player.getPosition();
         const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
         Player.setColliders(Buildings.colliders);
-        Player.update(dt, Keys, Buildings.colliders, groundHeight);
+        Player.update(simDt, Keys, Buildings.colliders, groundHeight);
     }
 
-    // Update animations
+    // Update animations (scaled)
     if (AnimationController && Player) {
-        AnimationController.update(dt, Player.getState());
+        AnimationController.update(simDt, Player.getState());
     }
 
-    // Update camera
+    // Update camera (unscaled so input/camera remains responsive during hitstop)
     if (PlayerCamera && Player) {
-        PlayerCamera.update(dt, Mouse);
+        PlayerCamera.update(rawDt, Mouse);
     }
 
     // Update sky + lighting based on time of day
@@ -427,17 +554,18 @@ function update(dt) {
         Buildings.updateLOD(World3D.camera.position, GraphicsState.currentPreset);
     }
 
-    // Update NPC System
+    // Update NPC System (scaled)
     if (NPCSystem && Player) {
-        NPCSystem.update(dt, {
+        NPCSystem.update(simDt, {
             player: NPCPlayerProxy,
             camera: World3D.camera,
+            feedback: GameState,
         });
     }
 
     // Update debug stats
     if (DebugState.enabled) {
-        DebugState.timeSinceLastUpdate += dt;
+        DebugState.timeSinceLastUpdate += rawDt;
         if (DebugState.timeSinceLastUpdate >= DebugState.updateInterval) {
             updateDebugStats();
             DebugState.timeSinceLastUpdate = 0;
@@ -454,7 +582,18 @@ function update(dt) {
 function render() {
     if (!World3D) return;
 
+    const shakeOffset = ScreenShakeState.currentOffset;
+    const hasShake = shakeOffset.lengthSq() > 0;
+
+    if (hasShake) {
+        World3D.camera.position.add(shakeOffset);
+    }
+
     World3D.renderer.render(World3D.scene, World3D.camera);
+
+    if (hasShake) {
+        World3D.camera.position.sub(shakeOffset);
+    }
 }
 
 // ============================================

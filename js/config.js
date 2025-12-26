@@ -130,6 +130,15 @@ export const GAME_CONFIG = {
         IMPACT_FLASH_DURATION: 0.1,
         SCREEN_RED_DURATION: 0.2,
 
+        // Hitstop + Screen Shake (heavy impact feedback)
+        HITSTOP_DURATION: 0.05,          // Duración del freeze frame
+        HITSTOP_RECOVERY_TIME: 0.1,      // Tiempo para volver a timeScale 1.0
+        SCREEN_SHAKE_INTENSITY: 0.5,     // Multiplicador base de amplitud
+        SCREEN_SHAKE_DURATION: 0.15,     // Duración del shake
+        SCREEN_SHAKE_DECAY: 0.85,        // Cuánto se reduce cada frame (1.0 = sin decay)
+        SCREEN_SHAKE_FREQUENCY: 10.0,    // Velocidad del ruido
+        COLLISION_SHAKE_THRESHOLD: 15.0, // Velocidad mínima para shake en colisiones NPC
+
         // Ragdoll & Death
         DEATH_SLOWMO: 0.5,
         DEATH_SLOWMO_DURATION: 2.0,
