@@ -379,6 +379,32 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const hitPoint = bestTarget.mesh.position.clone();
         hitPoint.y += 1.0;
 
+        // Trigger viral factory effects for critical impacts
+        const impactVelocity = bestTarget.state?.velocity?.length() || 0;
+        if (impactVelocity > 25 || damage > 30) {
+           // Trigger camera zoom
+           if (camera.triggerImpactZoom) {
+               camera.triggerImpactZoom(1.15, 0.1);
+           }
+
+           // Trigger time freeze
+           if (window.GlobalTimeFreeze) {
+               window.GlobalTimeFreeze.slowMotion(0.1, 0.15);
+           }
+
+           // Trigger dopamine popup
+           if (window.DopaminePopupSystem) {
+               window.DopaminePopupSystem.spawn(hitPoint, 'BONK');
+           }
+
+           // Multiple hits combo
+           if (state.currentCombo >= 3) {
+               if (window.DopaminePopupSystem) {
+                   window.DopaminePopupSystem.spawn(hitPoint, 'TRIPLE_BONK');
+               }
+           }
+        }
+
         // Calculate impulse for Furia System
         const knockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE;
         const impulse = knockbackForce;

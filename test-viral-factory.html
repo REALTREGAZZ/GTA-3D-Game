@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Viral Factory Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .test-section {
+            background-color: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .console {
+            background-color: #333;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Viral Factory Feature Test</h1>
+    
+    <div class="test-section">
+        <h2>1️⃣ Impact Pause (Time Freeze)</h2>
+        <button onclick="testTimeFreeze()">Test Time Freeze</button>
+        <p>Should slow down time to 10% for 150ms and log to console.</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>2️⃣ Chaos Camera</h2>
+        <button onclick="testChaosCamera()">Test Chaos Monitor</button>
+        <p>Should detect ragdolls and trigger cinematic mode when ≥5 NPCs are in the air.</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>3️⃣ Dopamine Popups</h2>
+        <button onclick="testDopaminePopups()">Test Popups</button>
+        <p>Should spawn neon text popups at specified positions.</p>
+    </div>
+    
+    <div class="test-section">
+        <h2>4️⃣ Camera Zoom</h2>
+        <button onclick="testCameraZoom()">Test Camera Zoom</button>
+        <p>Should trigger impact zoom effect.</p>
+    </div>
+    
+    <div class="console" id="console"></div>
+    
+    <script>
+        // Mock THREE.js for testing
+        window.THREE = {
+            MathUtils: {
+                lerp: function(a, b, t) {
+                    return a + (b - a) * t;
+                }
+            },
+            Vector3: class {
+                constructor(x=0, y=0, z=0) {
+                    this.x = x;
+                    this.y = y;
+                    this.z = z;
+                }
+                copy(v) {
+                    this.x = v.x;
+                    this.y = v.y;
+                    this.z = v.z;
+                    return this;
+                }
+                add(v) {
+                    this.x += v.x;
+                    this.y += v.y;
+                    this.z += v.z;
+                    return this;
+                }
+                lerp(v, t) {
+                    this.x += (v.x - this.x) * t;
+                    this.y += (v.y - this.y) * t;
+                    this.z += (v.z - this.z) * t;
+                    return this;
+                }
+                clone() {
+                    return new THREE.Vector3(this.x, this.y, this.z);
+                }
+                lengthSq() {
+                    return this.x * this.x + this.y * this.y + this.z * this.z;
+                }
+            }
+        };
+        
+        // Log to console div
+        function log(message) {
+            const consoleDiv = document.getElementById('console');
+            consoleDiv.innerHTML += message + '\n';
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Test Time Freeze
+        function testTimeFreeze() {
+            log('Testing Time Freeze...');
+            
+            if (window.GlobalTimeFreeze) {
+                log('✅ GlobalTimeFreeze is available');
+                GlobalTimeFreeze.slowMotion(0.1, 0.15);
+                
+                // Test update
+                setTimeout(() => {
+                    GlobalTimeFreeze.update(0.05);
+                    log(`Time freeze active: ${GlobalTimeFreeze.isActive}, factor: ${GlobalTimeFreeze.factor}`);
+                }, 100);
+                
+                setTimeout(() => {
+                    GlobalTimeFreeze.update(0.1);
+                    log(`After 100ms - active: ${GlobalTimeFreeze.isActive}, factor: ${GlobalTimeFreeze.factor}`);
+                }, 200);
+                
+                setTimeout(() => {
+                    GlobalTimeFreeze.update(0.1);
+                    log(`After 200ms - active: ${GlobalTimeFreeze.isActive}, factor: ${GlobalTimeFreeze.factor}`);
+                }, 300);
+            } else {
+                log('❌ GlobalTimeFreeze not found');
+            }
+        }
+        
+        // Test Chaos Camera
+        function testChaosCamera() {
+            log('Testing Chaos Camera...');
+            
+            if (window.ChaosMonitor) {
+                log('✅ ChaosMonitor is available');
+                log('Chaos camera system ready for integration');
+            } else {
+                log('❌ ChaosMonitor not found');
+            }
+        }
+        
+        // Test Dopamine Popups
+        function testDopaminePopups() {
+            log('Testing Dopamine Popups...');
+            
+            if (window.DopaminePopupSystem) {
+                log('✅ DopaminePopupSystem is available');
+                log('Popup system ready for integration');
+            } else {
+                log('❌ DopaminePopupSystem not found');
+            }
+        }
+        
+        // Test Camera Zoom
+        function testCameraZoom() {
+            log('Testing Camera Zoom...');
+            
+            // Create a mock camera
+            const mockCamera = {
+                zoom: 1.0,
+                updateProjectionMatrix: function() {
+                    log(`Camera zoom set to: ${this.zoom}`);
+                }
+            };
+            
+            // Test the zoom functionality
+            if (mockCamera.triggerImpactZoom) {
+                mockCamera.triggerImpactZoom(1.15, 0.1);
+                log('✅ Camera zoom triggered');
+            } else {
+                log('❌ Camera zoom method not found');
+            }
+        }
+        
+        log('Viral Factory Test Ready!');
+        log('Click the buttons above to test each feature.');
+    </script>
+</body>
+</html>
