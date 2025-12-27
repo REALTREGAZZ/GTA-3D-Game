@@ -198,6 +198,16 @@ class AudioEngine {
                 this.registerSound(gainNode, priority, 0.3);
                 break;
 
+            case 'CHARGE':
+                this.synthesizeCharge(ctx, gainNode, now, dynamicVolume, spatial.volume, masterVolume, pitchVariation);
+                this.registerSound(gainNode, priority, 0.3);
+                break;
+
+            case 'THWOOM':
+                this.synthesizeThwoom(ctx, gainNode, now, dynamicVolume, spatial.volume, masterVolume, pitchVariation);
+                this.registerSound(gainNode, priority, 0.4);
+                break;
+
             default:
                 console.warn(`Unknown sound type: ${type}`);
         }
@@ -370,6 +380,61 @@ class AudioEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.3);
+    }
+
+    /**
+     * CHARGE - Rising whirrrr sound for ability charging
+     * Sine oscillator with rising pitch (400Hz → 2000Hz)
+     */
+    synthesizeCharge(ctx, gainNode, now, dynamicVolume, spatialVolume, masterVolume, pitchVar) {
+        const baseVolume = 0.6 * masterVolume * spatialVolume * dynamicVolume;
+        
+        // Create oscillator
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        
+        // Rising pitch sweep
+        const startFreq = 400 * pitchVar;
+        const endFreq = 2000 * pitchVar;
+        osc.frequency.setValueAtTime(startFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.3);
+        
+        // Envelope: gradual attack, sustain, quick decay
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(baseVolume, now + 0.02);
+        gainNode.gain.linearRampToValueAtTime(baseVolume, now + 0.25);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        
+        osc.connect(gainNode);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    }
+
+    /**
+     * THWOOM - Heavy bass impact for area effect
+     * Square wave: 100Hz → 20Hz, massive impact
+     */
+    synthesizeThwoom(ctx, gainNode, now, dynamicVolume, spatialVolume, masterVolume, pitchVar) {
+        const baseVolume = 1.0 * masterVolume * spatialVolume * dynamicVolume;
+        
+        // Create oscillator
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        
+        // Aggressive bass drop
+        const startFreq = 100 * pitchVar;
+        const endFreq = Math.max(20, 20 * pitchVar);
+        osc.frequency.setValueAtTime(startFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.3);
+        
+        // Envelope: immediate impact, long decay with reverb feel
+        gainNode.gain.setValueAtTime(baseVolume, now);
+        gainNode.gain.exponentialRampToValueAtTime(baseVolume * 0.3, now + 0.2);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+        
+        osc.connect(gainNode);
+        osc.start(now);
+        osc.stop(now + 0.4);
     }
 
     /**

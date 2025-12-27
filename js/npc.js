@@ -94,6 +94,10 @@ export function createNPC(position = new THREE.Vector3()) {
         justEnteredRagdoll: false,
         ragdollImpactSpeed: 0,
 
+        // Suspension state (for Gravity Blast)
+        isSuspended: false,
+        suspensionTimer: 0,
+
         // Collision feedback
         collisionShakeCooldown: 0,
     };
@@ -183,6 +187,16 @@ export function createNPC(position = new THREE.Vector3()) {
         
         // Restore color
         body.material.color.copy(state.baseColor);
+    }
+
+    function enterSuspension(duration) {
+        state.isSuspended = true;
+        state.suspensionTimer = duration;
+    }
+
+    function exitSuspension() {
+        state.isSuspended = false;
+        state.suspensionTimer = 0;
     }
 
     function takeDamage(amount, source = null, impulse = 0) {
@@ -607,22 +621,41 @@ export function createNPC(position = new THREE.Vector3()) {
             }
         }
 
-        // Clamp speed + apply basic damping
-        state.velocity.y = 0;
-        const speed = state.velocity.length();
-        if (speed > maxSpeed) {
-            state.velocity.multiplyScalar(maxSpeed / speed);
-        }
-        state.velocity.multiplyScalar(Math.pow(0.88, dt * 60));
+        // Suspension logic (for Gravity Blast)
+        if (state.isSuspended) {
+            state.suspensionTimer -= dt;
+            
+            // Block horizontal movement during suspension
+            state.velocity.x = 0;
+            state.velocity.z = 0;
+            
+            // Apply gravity to Y
+            const gravity = GAME_CONFIG.PLAYER.GRAVITY || 30.0;
+            state.velocity.y -= gravity * dt;
+            
+            // Exit suspension when timer expires
+            if (state.suspensionTimer <= 0) {
+                exitSuspension();
+            }
+        } else {
+            // Normal velocity processing (not suspended)
+            // Clamp speed + apply basic damping
+            state.velocity.y = 0;
+            const speed = state.velocity.length();
+            if (speed > maxSpeed) {
+                state.velocity.multiplyScalar(maxSpeed / speed);
+            }
+            state.velocity.multiplyScalar(Math.pow(0.88, dt * 60));
 
-        // Furia System: Ragdoll por velocidad alta
-        const VELOCITY_RAGDOLL_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.VELOCITY_RAGDOLL_THRESHOLD || 10.0;
-        if (!state.isRagdoll && speed > VELOCITY_RAGDOLL_THRESHOLD) {
-            const RAGDOLL_DURATION = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_DURATION_FROM_VELOCITY || 1.5;
-            enterRagdoll(RAGDOLL_DURATION);
+            // Furia System: Ragdoll por velocidad alta
+            const VELOCITY_RAGDOLL_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.VELOCITY_RAGDOLL_THRESHOLD || 10.0;
+            if (!state.isRagdoll && speed > VELOCITY_RAGDOLL_THRESHOLD) {
+                const RAGDOLL_DURATION = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_DURATION_FROM_VELOCITY || 1.5;
+                enterRagdoll(RAGDOLL_DURATION);
+            }
         }
 
-        // Move
+        // Move (apply velocity regardless of suspension state)
         group.position.add(state.velocity.clone().multiplyScalar(dt));
 
         // Face velocity direction
@@ -703,6 +736,8 @@ export function createNPC(position = new THREE.Vector3()) {
         setActive,
         enterRagdoll,
         exitRagdoll,
+        enterSuspension,
+        exitSuspension,
         getState: () => ({ ...state }),
     };
 
