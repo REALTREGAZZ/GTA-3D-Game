@@ -547,7 +547,12 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         });
     }
 
-    function applyDamage(amount, direction, type) {
+    function applyDamage(amount, direction, type, attacker = null) {
+        // Track last attacker for kill cam
+        if (type === 'NPC' && attacker) {
+            gameState.player.lastAttacker = attacker;
+        }
+
         // Flash player material
         if (player?.state) {
             player.state.flashTime = GAME_CONFIG.COMBAT.IMPACT_FLASH_DURATION;
@@ -617,9 +622,11 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
             },
         };
 
-        // Activate replay system (will be handled by main.js)
-        if (gameState.onDeath) {
-            gameState.onDeath(deathEvent);
+        // Note: Chaos Camera kill cam will handle death cinematically
+        // Replay system is paused until after kill cam finishes
+        if (gameState.onDeath && !window.ChaosCamera?.state?.isInKillCam) {
+            // Don't activate replay immediately - let kill cam handle it first
+            // gameState.onDeath(deathEvent);
         }
     }
 
@@ -875,9 +882,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         return deathEvent;
     }
 
-    function damagePlayerFromNPC(amount, direction) {
+    function damagePlayerFromNPC(amount, direction, attacker = null) {
         if (gameState.isReplaying) return;
-        applyDamage(amount, direction || new THREE.Vector3(1, 0, 0), 'NPC');
+        applyDamage(amount, direction || new THREE.Vector3(1, 0, 0), 'NPC', attacker);
     }
 
     return {

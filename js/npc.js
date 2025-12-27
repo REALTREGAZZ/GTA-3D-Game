@@ -240,7 +240,7 @@ export function createNPC(position = new THREE.Vector3()) {
                 target.takeDamage(damage, api);
             } else {
                 const normDir = dir.lengthSq() > 0 ? dir.clone().normalize() : new THREE.Vector3(1, 0, 0);
-                target.takeDamage(damage, normDir);
+                target.takeDamage(damage, normDir, api);
             }
         }
 
