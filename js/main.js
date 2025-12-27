@@ -275,6 +275,10 @@ let WaveSystem = null;
 let DecalSystem = null;
 let PostProcessing = null;
 
+// Juice Sprint Systems
+let TrailsSystem = null;
+let DustEmitterSystem = null;
+
 // ============================================
 // COMBAT & REPLAY UI
 // ============================================
@@ -419,8 +423,8 @@ function initThreeWorld() {
     PostProcessing.setSize(window.innerWidth, window.innerHeight);
 
     // Juice Sprint systems
-    const TrailsSystem = createTrailsSystem(World3D.scene);
-    const DustEmitterSystem = createDustEmitterSystem(World3D.scene);
+    TrailsSystem = createTrailsSystem(World3D.scene);
+    DustEmitterSystem = createDustEmitterSystem(World3D.scene);
 
     // Pass references to NPC system
     NPCSystem.setTrailsSystem(TrailsSystem);
@@ -741,8 +745,8 @@ function update(dt, rawDt = dt) {
     PostProcessing?.update?.(rawDt);
 
     // Juice Sprint updates
-    TrailsSystem?.update?.(rawDt);
-    DustEmitterSystem?.update?.(rawDt);
+    if (TrailsSystem && TrailsSystem.update) TrailsSystem.update(rawDt);
+    if (DustEmitterSystem && DustEmitterSystem.update) DustEmitterSystem.update(rawDt);
 
     // Update debug stats
     if (DebugState.enabled) {
@@ -1374,14 +1378,28 @@ async function init() {
 // CLEANUP ON PAGE UNLOAD
 // ============================================
 window.addEventListener('beforeunload', () => {
-    if (audioEngine) {
-        audioEngine.dispose();
+    try {
+        if (audioEngine && audioEngine.dispose) {
+            audioEngine.dispose();
+        }
+    } catch (e) {
+        console.warn('Error disposing audio engine:', e);
     }
-    if (TrailsSystem) {
-        TrailsSystem.dispose();
+    
+    try {
+        if (TrailsSystem && TrailsSystem.dispose) {
+            TrailsSystem.dispose();
+        }
+    } catch (e) {
+        console.warn('Error disposing trails system:', e);
     }
-    if (DustEmitterSystem) {
-        DustEmitterSystem.dispose();
+    
+    try {
+        if (DustEmitterSystem && DustEmitterSystem.dispose) {
+            DustEmitterSystem.dispose();
+        }
+    } catch (e) {
+        console.warn('Error disposing dust emitter system:', e);
     }
 });
 
