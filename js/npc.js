@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS, DOPAMINE_CONFIG } from './config.js';
+import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS, DOPAMINE_CONFIG, JUICE_SPRINT_CONFIG } from './config.js';
 import { applyToonMaterial } from './world.js';
 import { audioEngine } from './audio-engine.js';
 
@@ -115,6 +115,10 @@ export function createNPC(position = new THREE.Vector3()) {
 
         // Collision feedback
         collisionShakeCooldown: 0,
+
+        // Squash & Stretch state
+        squashTimer: 0,
+        squashIntensity: 0,
     };
 
     const BASIC_MAX_HEALTH = 60;
@@ -204,10 +208,19 @@ export function createNPC(position = new THREE.Vector3()) {
         state.decalCooldown = 0;
         state.collisionShakeCooldown = 0;
 
+        // Squash & Stretch reset
+        state.squashTimer = 0;
+        state.squashIntensity = 0;
+
         // Furia System reset
         state.lastAttacker = null;
         state.lastHitTime = 0;
         state.furia = 0;
+
+        // Reset mesh scales
+        body.scale.set(1, 1, 1);
+        head.scale.set(1, 1, 1);
+        heavyCube.scale.set(1, 1, 1);
 
         indicator.visible = true;
         setVisualColor(state.baseColor);
@@ -446,10 +459,10 @@ export function createNPC(position = new THREE.Vector3()) {
                 state.velocity.x *= Math.pow(friction, dt * 60);
                 state.velocity.z *= Math.pow(friction, dt * 60);
             }
-            
+
             // Move with physics
             group.position.add(state.velocity.clone().multiplyScalar(dt));
-            
+
             // Check collision with buildings
             if (buildings?.colliders?.length) {
                 for (let i = 0; i < buildings.colliders.length; i++) {
@@ -468,19 +481,35 @@ export function createNPC(position = new THREE.Vector3()) {
                             // Bounce velocity
                             state.velocity.x *= -0.3;
                             state.velocity.z *= -0.3;
+
+                            // Spawn dust on building impact
+                            const impactIntensity = Math.min(state.velocity.length() / 30, 1.0);
+                            if (context?.dustEmitterSystem && impactIntensity > 0.5) {
+                                context.dustEmitterSystem.spawnDustCloud(
+                                    group.position.clone(),
+                                    Math.floor(impactIntensity * JUICE_SPRINT_CONFIG.DUST_EMITTER.PARTICLES_PER_IMPACT)
+                                );
+                            }
                         }
                         break;
                     }
                 }
             }
             
-            // Snap to ground + impact decals
+            // Snap to ground + impact decals + squash & stretch
             if (typeof terrainHeightAt === 'function') {
                 const groundY = terrainHeightAt(group.position.x, group.position.z);
                 const desiredY = groundY + 1.0;
 
                 if (group.position.y < desiredY) {
                     const impactSpeed = -state.velocity.y;
+
+                    // Squash & Stretch on ground impact
+                    if (impactSpeed > JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MIN_IMPACT_VELOCITY) {
+                        const impactIntensity = Math.min(impactSpeed / 30, 1.0);
+                        state.squashTimer = JUICE_SPRINT_CONFIG.SQUASH_STRETCH.DURATION;
+                        state.squashIntensity = impactIntensity;
+                    }
 
                     if (
                         decalSystem &&
@@ -500,9 +529,17 @@ export function createNPC(position = new THREE.Vector3()) {
                     }
                 }
             }
-            
-            // Ragdoll visual: tilt while flying
+
+            // Spawn trails when flying fast (motion lines)
             const horizontalSpeed = Math.sqrt(state.velocity.x ** 2 + state.velocity.z ** 2);
+            if (context?.trailsSystem && horizontalSpeed > JUICE_SPRINT_CONFIG.TRAILS.SPAWN_THRESHOLD_VELOCITY) {
+                // Spawn trail every few frames to avoid too many particles
+                if (Math.random() < 0.3) {
+                    context.trailsSystem.spawnTrail(group.position.clone(), JUICE_SPRINT_CONFIG.TRAILS.COLOR);
+                }
+            }
+
+            // Ragdoll visual: tilt while flying
             if (horizontalSpeed > 1.0) {
                 const tiltAmount = Math.min(horizontalSpeed / 15.0, 0.8);
                 group.rotation.x = tiltAmount * Math.PI * 0.4;
@@ -825,6 +862,34 @@ export function createNPC(position = new THREE.Vector3()) {
 
                 group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));
             }
+        }
+
+        // Update squash & stretch (visual deformation)
+        if (state.squashTimer > 0) {
+            state.squashTimer -= dt;
+            const progress = state.squashTimer / JUICE_SPRINT_CONFIG.SQUASH_STRETCH.DURATION;
+
+            // Interpolate scale from squashed to normal
+            const squashScale = JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_SQUASH_SCALE_Y +
+                (1.0 - JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_SQUASH_SCALE_Y) * (1 - progress);
+            const stretchScale = JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_STRETCH_SCALE_XZ +
+                (1.0 - JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_STRETCH_SCALE_XZ) * (1 - progress);
+
+            // Apply to meshes
+            body.scale.y = squashScale;
+            body.scale.x = stretchScale;
+            body.scale.z = stretchScale;
+            head.scale.y = squashScale * 0.9;
+            head.scale.z = stretchScale * 0.9;
+            head.scale.x = stretchScale * 0.9;
+            heavyCube.scale.y = squashScale;
+            heavyCube.scale.x = stretchScale;
+            heavyCube.scale.z = stretchScale;
+        } else {
+            // Reset to normal scale
+            body.scale.set(1, 1, 1);
+            head.scale.set(1, 1, 1);
+            heavyCube.scale.set(1, 1, 1);
         }
     }
 

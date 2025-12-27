@@ -37,6 +37,8 @@ import { createChaosScoreSystem } from './chaos-score.js';
 import { createWaveSystem } from './wave-system.js';
 import { createDecalSystem } from './decal-system.js';
 import { createPostProcessingEffects } from './post-processing.js';
+import { createTrailsSystem } from './trails-system.js';
+import { createDustEmitterSystem } from './dust-emitter.js';
 
 // ============================================
 // GAME STATE
@@ -416,6 +418,14 @@ function initThreeWorld() {
     PostProcessing = createPostProcessingEffects(World3D.renderer, World3D.scene, World3D.camera);
     PostProcessing.setSize(window.innerWidth, window.innerHeight);
 
+    // Juice Sprint systems
+    const TrailsSystem = createTrailsSystem(World3D.scene);
+    const DustEmitterSystem = createDustEmitterSystem(World3D.scene);
+
+    // Pass references to NPC system
+    NPCSystem.setTrailsSystem(TrailsSystem);
+    NPCSystem.setDustEmitterSystem(DustEmitterSystem);
+
     const dopamineUI = {
         dopamine: UI.dopamine,
         updateWaveDisplay: (waveNum) => {
@@ -729,6 +739,10 @@ function update(dt, rawDt = dt) {
     WaveSystem?.update?.(rawDt);
     DecalSystem?.update?.(rawDt);
     PostProcessing?.update?.(rawDt);
+
+    // Juice Sprint updates
+    TrailsSystem?.update?.(rawDt);
+    DustEmitterSystem?.update?.(rawDt);
 
     // Update debug stats
     if (DebugState.enabled) {
@@ -1362,6 +1376,12 @@ async function init() {
 window.addEventListener('beforeunload', () => {
     if (audioEngine) {
         audioEngine.dispose();
+    }
+    if (TrailsSystem) {
+        TrailsSystem.dispose();
+    }
+    if (DustEmitterSystem) {
+        DustEmitterSystem.dispose();
     }
 });
 
