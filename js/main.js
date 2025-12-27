@@ -279,6 +279,7 @@ let PostProcessing = null;
 // Juice Sprint Systems
 let TrailsSystem = null;
 let DustEmitterSystem = null;
+let PerformanceMonitor = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -307,7 +308,7 @@ const GraphicsState = {
 // ============================================
 // PERFORMANCE MONITOR (Dynamic Scaling)
 // ============================================
-const PerformanceMonitor = {
+PerformanceMonitor = {
     fps: 60,
     fpsHistory: [],
     maxHistory: 120,  // 2 seconds at 60 FPS
@@ -392,6 +393,9 @@ const PerformanceMonitor = {
         };
     },
 };
+
+// Make PerformanceMonitor globally accessible
+window.PerformanceMonitor = PerformanceMonitor;
 
 // ============================================
 // DEBUG STATE
