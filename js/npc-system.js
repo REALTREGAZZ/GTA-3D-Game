@@ -25,6 +25,8 @@ export function createNPCSystem(config = {}) {
         active: [],
         spawnTimer: 0,
         totalSpawned: 0,
+        trailsSystem: null,
+        dustEmitterSystem: null,
     };
 
     // Create pool of NPCs
@@ -140,6 +142,8 @@ export function createNPCSystem(config = {}) {
                 detectionRadius,
                 feedback,
                 decalSystem,
+                trailsSystem: state.trailsSystem,
+                dustEmitterSystem: state.dustEmitterSystem,
             });
         }
 
@@ -188,6 +192,8 @@ export function createNPCSystem(config = {}) {
         getAllActiveNPCs,
         getStats,
         clear,
+        setTrailsSystem(ts) { state.trailsSystem = ts; },
+        setDustEmitterSystem(des) { state.dustEmitterSystem = des; },
         state,
     };
 }

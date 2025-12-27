@@ -503,7 +503,7 @@ export const GRAPHICS_PRESETS = {
     FLAT_COLORS: {
         PLAYER: 0xFF6B6B,
         NPC_HOSTILE: 0xFF4444,
-        NPC_HEAVY: 0x6b1f1f,
+        NPC_HEAVY: 0x333333,
         GROUND: 0x8B9DC3,
         BUILDING: 0xC0A080,
         SKY: 0x87CEEB,
@@ -815,6 +815,47 @@ export const WAVE_SYSTEM_CONFIG = {
     INITIAL_NPC_COUNT: 5,
     SPAWN_RADIUS: 30,
     WAVE_SPAWN_DELAY: 10.0,
+};
+
+// ============================================
+// JUICE SPRINT CONFIG (Amplified Impact Polish)
+// ============================================
+export const JUICE_SPRINT_CONFIG = {
+    // Squash & Stretch (Ground Impact Deformation)
+    SQUASH_STRETCH: {
+        ENABLED: true,
+        DURATION: 0.15,
+        MIN_IMPACT_VELOCITY: 8.0,
+        MAX_SQUASH_SCALE_Y: 0.5,
+        MAX_STRETCH_SCALE_XZ: 1.3,
+    },
+
+    // Trails (Motion Lines for Flying NPCs)
+    TRAILS: {
+        ENABLED: true,
+        SPAWN_THRESHOLD_VELOCITY: 15.0,
+        COLOR: 0x00ffff,
+        LIFETIME: 0.3,
+        MAX_TRAILS: 100,
+    },
+
+    // Heavy NPC (Special Enemy Type)
+    HEAVY_NPC: {
+        SCALE: 1.5,
+        COLOR: 0x333333,
+        HEALTH: 150,
+        KNOCKBACK_IMMUNE_MELEE: true,
+        KNOCKBACK_VULNERABLE_BLAST: true,
+    },
+
+    // Dust Emitter (Building Impact Particles)
+    DUST_EMITTER: {
+        ENABLED: true,
+        MAX_PARTICLES: 50,
+        LIFETIME: 0.5,
+        PARTICLES_PER_IMPACT: 5,
+        MIN_IMPACT_VELOCITY: 15.0,
+    },
 };
 
 // ============================================
