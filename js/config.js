@@ -716,35 +716,36 @@ export default {
 };
 
 // Also export COMBAT separately for easier access
-// Satirical Overlay Texts
+// Satirical Overlay Texts - DOPAMINE ARCHITECTURE
 const SATIRICAL_TEXTS = {
     DEATH: [
-        "Skill Issue",
-        "Physics Win Again",
-        "Unfortunate",
-        "Critical Failure",
-        "Newton's Laws Prevail",
+        "SKILL ISSUE",
+        "PHYSICS WINS",
+        "OOPS",
+        "RIP",
+        "YIKES",
     ],
     CHAOS: [
-        "That Escalated",
-        "Oops",
-        "Violence ≠ Solution",
-        "And Then They Fought",
+        "PLOT TWIST",
+        "ESCALATED",
+        "OH NO",
+        "ANARCHY",
     ],
     HIGH_VELOCITY: [
-        "Going Very Fast",
-        "Wheee",
-        "Physics Is Real",
+        "WHEEE",
+        "FLYING",
+        "ZOOM",
     ],
     NPC_CHAIN: [
-        "Family Dispute",
-        "Friendly Fire",
-        "Plot Twist",
+        "FRIENDLY FIRE",
+        "BETRAYAL",
+        "OUCH",
+        "ACCIDENT",
     ],
     RAGDOLL: [
-        "Lost The Plot",
-        "Gravity Wins",
-        "Tumbling Down",
+        "DOWN",
+        "GRAVITY WINS",
+        "TUMBLE",
     ],
 };
 
