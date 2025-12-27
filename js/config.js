@@ -627,21 +627,38 @@ export function getHigherPreset(currentPresetName) {
 // ============================================
 export const AUDIO_CONFIG = {
     // Master Volume
-    MASTER_VOLUME: 1.0,
+    MASTER_VOLUME: 0.7,
+    ENABLED: true,
 
-    // Category Volumes
+    // Voice Culling
+    MAX_VOICE_CHANNELS: 4,
+
+    // Individual Sound Volumes
+    BONK_VOLUME: 0.8,        // Strong knockback impact
+    WHOOSH_VOLUME: 0.6,      // Knockback launch
+    ARGH_VOLUME: 0.7,        // NPC death/pain
+    CRASH_VOLUME: 0.5,       // Wall collision
+    IMPACT_VOLUME: 0.9,      // Critical hit
+
+    // Pitch Variation (±15%)
+    PITCH_VARIATION: 0.15,
+
+    // Spatial Audio
+    SPATIAL_AUDIO: true,
+    SPATIAL_MAX_DISTANCE: 50,
+
+    // Category Volumes (Legacy support)
     MUSIC_VOLUME: 0.7,
     SFX_VOLUME: 0.9,
     VOICE_VOLUME: 0.9,
     AMBIENT_VOLUME: 0.6,
     VEHICLE_VOLUME: 0.7,
 
-    // 3D Audio
-    SPATIAL_AUDIO: true,
+    // 3D Audio (Legacy)
     MAX_DISTANCE: 100.0,
     ROLLOFF_FACTOR: 1.0,
 
-    // Doppler Effect
+    // Doppler Effect (Legacy)
     DOPPLER_ENABLED: true,
     DOPPLER_FACTOR: 1.0,
 
