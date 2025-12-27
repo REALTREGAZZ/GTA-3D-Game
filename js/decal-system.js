@@ -96,5 +96,23 @@ export function createDecalSystem(scene, maxDecals = 20) {
 
             sharedGeometry.dispose();
         },
+
+        setMaxDecals(count) {
+            // Dynamic scaling: adjust max decals
+            const currentMax = decalPool.length + activeDecals.length;
+            if (count < currentMax) {
+                // Reduce: remove excess decals from pool
+                while (decalPool.length > count && decalPool.length > 0) {
+                    const decal = decalPool.pop();
+                    decal.material?.dispose?.();
+                }
+            } else if (count > currentMax) {
+                // Increase: create more decals
+                const needed = count - decalPool.length;
+                for (let i = 0; i < needed; i++) {
+                    decalPool.push(createDecalMesh());
+                }
+            }
+        },
     };
 }

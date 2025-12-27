@@ -119,6 +119,12 @@ export function createNPC(position = new THREE.Vector3()) {
         // Squash & Stretch state
         squashTimer: 0,
         squashIntensity: 0,
+
+        // Dizzy State (Heavy NPC weakness mechanic)
+        punches_received: 0,
+        isDizzy: false,
+        dizzyTimer: 0,
+        dizzyDuration: 1.5,
     };
 
     const BASIC_MAX_HEALTH = 60;
@@ -217,6 +223,11 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastHitTime = 0;
         state.furia = 0;
 
+        // Dizzy State reset
+        state.punches_received = 0;
+        state.isDizzy = false;
+        state.dizzyTimer = 0;
+
         // Reset mesh scales
         body.scale.set(1, 1, 1);
         head.scale.set(1, 1, 1);
@@ -288,7 +299,7 @@ export function createNPC(position = new THREE.Vector3()) {
         state.suspendedVelocity.set(0, 0, 0);
     }
 
-    function takeDamage(amount, source = null, impulse = 0) {
+    function takeDamage(amount, source = null, impulse = 0, isMelee = false) {
         if (state.state === NPC_STATES.DEAD) return;
 
         state.health -= amount;
@@ -296,6 +307,20 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastDamagedBy = source;
 
         setVisualColor(new THREE.Color(0xffffff));
+
+        // Dizzy State: Heavy NPCs become Dizzy after 3 melee punches
+        if (state.type === 'HEAVY' && isMelee && amount > 0) {
+            state.punches_received++;
+            if (state.punches_received >= 3) {
+                state.isDizzy = true;
+                state.dizzyTimer = state.dizzyDuration;
+                state.punches_received = 0;
+                console.log('Heavy NPC is now DIZZY!');
+
+                // Visual feedback for Dizzy state
+                setVisualColor(new THREE.Color(0xff6666));
+            }
+        }
 
         // Furia System: Register last attacker and set furia if impulse is significant
         const IMPULSE_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.IMPULSE_THRESHOLD || 5.0;
@@ -600,6 +625,20 @@ export function createNPC(position = new THREE.Vector3()) {
             
             // Update attack cooldown during furia
             state.attackCooldown = Math.max(0, state.attackCooldown - dt);
+        }
+
+        // Dizzy State update: countdown timer and visual feedback
+        if (state.isDizzy) {
+            state.dizzyTimer -= dt;
+            if (state.dizzyTimer <= 0) {
+                state.isDizzy = false;
+                setVisualColor(state.baseColor);
+                console.log('Heavy NPC recovered from Dizzy state');
+            } else {
+                // Visual feedback: wobble effect during Dizzy
+                const wobble = Math.sin(state.dizzyTimer * 20) * 0.1;
+                group.rotation.y = wobble;
+            }
         }
 
         // Visual hit flash decay

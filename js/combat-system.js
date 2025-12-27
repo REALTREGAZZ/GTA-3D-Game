@@ -154,9 +154,15 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         // Skip if NPC is already dead
         if (npc.state.state === 'DEAD') return;
 
-        // HEAVY units ignore punch knockback (only Gravity Blast can yeet them)
+        // HEAVY units ignore punch knockback UNLESS Dizzy (reduced knockback resistance)
+        // Dizzy Heavy NPCs have 0.4 knockback resistance (instead of 0.8)
         if ((npc.state.type === 'HEAVY' || npc.type === 'HEAVY') && attackType === 'MELEE') {
-            return;
+            // If Dizzy, allow partial knockback (0.4 instead of 0.8 resistance = 0.6 effective)
+            if (!npc.state.isDizzy) {
+                return;
+            }
+            // Apply reduced knockback to Dizzy NPCs
+            force *= 0.6; // 60% of normal knockback when Dizzy
         }
 
         // Calculate knockback velocity
@@ -378,7 +384,7 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const impulse = knockbackForce;
 
         // Damage + aggro + furia
-        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
+        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse, true);
 
         // Apply knockback and ragdoll
         applyKnockbackToNPC(bestTarget, attackDir, knockbackForce, { attackType: 'MELEE' });

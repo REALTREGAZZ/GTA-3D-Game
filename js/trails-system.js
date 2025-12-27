@@ -9,6 +9,7 @@ import { JUICE_SPRINT_CONFIG } from './config.js';
 export function createTrailsSystem(scene, maxTrails = 100) {
     const trails = [];
     const config = JUICE_SPRINT_CONFIG.TRAILS;
+    let activeTrailCount = 0;
 
     function createTrailParticle(position, color = config.COLOR) {
         const geo = new THREE.SphereGeometry(0.1, 4, 4);
@@ -22,7 +23,15 @@ export function createTrailsSystem(scene, maxTrails = 100) {
         mesh.userData.lifetime = config.LIFETIME;
         mesh.userData.maxLifetime = config.LIFETIME;
         scene.add(mesh);
+        activeTrailCount++;
         return mesh;
+    }
+
+    function disposeTrail(trail) {
+        scene.remove(trail);
+        if (trail.geometry) trail.geometry.dispose();
+        if (trail.material) trail.material.dispose();
+        activeTrailCount--;
     }
 
     return {
@@ -31,9 +40,7 @@ export function createTrailsSystem(scene, maxTrails = 100) {
 
             if (trails.length >= config.MAX_TRAILS) {
                 const old = trails.shift();
-                scene.remove(old);
-                old.geometry.dispose();
-                old.material.dispose();
+                disposeTrail(old);
             }
             const particle = createTrailParticle(position, color);
             trails.push(particle);
@@ -49,21 +56,31 @@ export function createTrailsSystem(scene, maxTrails = 100) {
                 trail.material.opacity = 0.8 * progress;
 
                 if (progress <= 0) {
-                    scene.remove(trail);
-                    trail.geometry.dispose();
-                    trail.material.dispose();
+                    disposeTrail(trail);
                     trails.splice(i, 1);
                 }
             }
         },
 
-        dispose() {
-            for (let i = 0; i < trails.length; i++) {
-                scene.remove(trails[i]);
-                trails[i].geometry.dispose();
-                trails[i].material.dispose();
+        getActiveCount() {
+            return activeTrailCount;
+        },
+
+        setMaxParticles(count) {
+            // Dynamic scaling: adjust max particles
+            config.MAX_TRAILS = count;
+        },
+
+        clear() {
+            while (trails.length > 0) {
+                const trail = trails.pop();
+                disposeTrail(trail);
             }
-            trails.length = 0;
+            console.log('TrailsSystem.clear() - All trails disposed');
+        },
+
+        dispose() {
+            this.clear();
         }
     };
 }

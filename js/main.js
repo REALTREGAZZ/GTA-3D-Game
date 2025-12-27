@@ -304,6 +304,95 @@ const GraphicsState = {
 };
 
 // ============================================
+// PERFORMANCE MONITOR (Dynamic Scaling)
+// ============================================
+const PerformanceMonitor = {
+    fps: 60,
+    fpsHistory: [],
+    maxHistory: 120,  // 2 seconds at 60 FPS
+    lowFpsThreshold: 35,
+    lowFpsCount: 0,
+    isScaledDown: false,
+    scaleRecoveryFps: 50,
+
+    update(currentFps) {
+        this.fps = currentFps;
+        this.fpsHistory.push(currentFps);
+        if (this.fpsHistory.length > this.maxHistory) {
+            this.fpsHistory.shift();
+        }
+
+        // Calculate average FPS
+        const avgFps = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+
+        // If average < 35 for 2 seconds, scale down visual effects
+        if (avgFps < this.lowFpsThreshold && !this.isScaledDown) {
+            console.warn(`🔴 FPS WARNING: ${avgFps.toFixed(1)} < 35. Scaling down visual effects...`);
+            this.scaleDown();
+        } else if (avgFps > this.scaleRecoveryFps && this.isScaledDown) {
+            console.log(`🟢 FPS RECOVERED: ${avgFps.toFixed(1)}. Scaling up...`);
+            this.scaleUp();
+        }
+    },
+
+    scaleDown() {
+        this.isScaledDown = true;
+
+        // Reduce Trails
+        if (TrailsSystem && TrailsSystem.setMaxParticles) {
+            const reduced = Math.floor(JUICE_SPRINT_CONFIG.TRAILS.MAX_TRAILS * 0.7);
+            TrailsSystem.setMaxParticles(reduced);
+            console.log(`Trails reduced to ${reduced}`);
+        }
+
+        // Reduce Dust
+        if (DustEmitterSystem && DustEmitterSystem.setMaxParticles) {
+            const reduced = Math.floor(JUICE_SPRINT_CONFIG.DUST_EMITTER.MAX_PARTICLES * 0.7);
+            DustEmitterSystem.setMaxParticles(reduced);
+            console.log(`Dust reduced to ${reduced}`);
+        }
+
+        // Reduce decal pool
+        if (DecalSystem && DecalSystem.setMaxDecals) {
+            DecalSystem.setMaxDecals(Math.floor(DOPAMINE_CONFIG.DECAL_MAX_POOL * 0.7));
+            console.log('Decal pool reduced to 70%');
+        }
+    },
+
+    scaleUp() {
+        this.isScaledDown = false;
+
+        // Restore Trails
+        if (TrailsSystem && TrailsSystem.setMaxParticles) {
+            TrailsSystem.setMaxParticles(JUICE_SPRINT_CONFIG.TRAILS.MAX_TRAILS);
+            console.log(`Trails restored to ${JUICE_SPRINT_CONFIG.TRAILS.MAX_TRAILS}`);
+        }
+
+        // Restore Dust
+        if (DustEmitterSystem && DustEmitterSystem.setMaxParticles) {
+            DustEmitterSystem.setMaxParticles(JUICE_SPRINT_CONFIG.DUST_EMITTER.MAX_PARTICLES);
+            console.log(`Dust restored to ${JUICE_SPRINT_CONFIG.DUST_EMITTER.MAX_PARTICLES}`);
+        }
+
+        // Restore decal pool
+        if (DecalSystem && DecalSystem.setMaxDecals) {
+            DecalSystem.setMaxDecals(DOPAMINE_CONFIG.DECAL_MAX_POOL);
+            console.log('Decal pool restored to 100%');
+        }
+    },
+
+    getState() {
+        return {
+            fps: this.fps,
+            isScaledDown: this.isScaledDown,
+            avgFps: this.fpsHistory.length > 0
+                ? (this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length).toFixed(1)
+                : 60,
+        };
+    },
+};
+
+// ============================================
 // DEBUG STATE
 // ============================================
 const DebugState = {
@@ -939,11 +1028,16 @@ function updateFpsCounter(deltaTime) {
     // Calculate average FPS
     const avgFps = GraphicsState.fpsHistory.reduce((sum, f) => sum + f, 0) / GraphicsState.fpsHistory.length;
 
+    // Update Performance Monitor for dynamic scaling
+    if (PerformanceMonitor) {
+        PerformanceMonitor.update(Math.round(avgFps));
+    }
+
     // Update FPS counter display (try both fpsValue and fpsCounter elements)
     const fpsElement = UI.settings.fpsValue || UI.settings.fpsCounter || document.getElementById('fpsValue') || document.getElementById('fpsCounter');
     if (fpsElement) {
         fpsElement.textContent = `${Math.round(avgFps)} FPS`;
-        
+
         // Update color based on FPS
         fpsElement.classList.remove('good', 'medium', 'bad');
         if (avgFps >= 60) {
