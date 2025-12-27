@@ -37,7 +37,7 @@ export function createNPCSystem(config = {}) {
         }
     }
 
-    function spawnAtPosition(position, count = 1) {
+    function spawnAtPosition(position, count = 1, options = {}) {
         const spawned = [];
         for (let i = 0; i < count; i++) {
             const npc = getInactiveNPC();
@@ -49,7 +49,7 @@ export function createNPCSystem(config = {}) {
                 (Math.random() - 0.5) * 3
             );
             const spawnPos = position.clone().add(offset);
-            npc.reset(spawnPos);
+            npc.reset(spawnPos, options);
             state.active.push(npc);
             spawned.push(npc);
             state.totalSpawned++;
@@ -57,9 +57,9 @@ export function createNPCSystem(config = {}) {
         return spawned;
     }
 
-    function spawn(position = null, count = 1) {
+    function spawn(position = null, count = 1, options = {}) {
         if (position) {
-            return spawnAtPosition(position, count);
+            return spawnAtPosition(position, count, options);
         }
 
         // Random spawn across map
@@ -74,7 +74,7 @@ export function createNPCSystem(config = {}) {
                 (Math.random() - 0.5) * mapSize * 0.7
             );
 
-            npc.reset(randomPos);
+            npc.reset(randomPos, options);
             state.active.push(npc);
             spawned.push(npc);
             state.totalSpawned++;
@@ -92,7 +92,7 @@ export function createNPCSystem(config = {}) {
     }
 
     function update(dt, context = {}) {
-        const { player = null, camera = null, feedback = null } = context;
+        const { player = null, camera = null, feedback = null, decalSystem = null } = context;
 
         // Frustum culling helper (optional)
         let isInView = null;
@@ -139,6 +139,7 @@ export function createNPCSystem(config = {}) {
                 fleePlayerRadius,
                 detectionRadius,
                 feedback,
+                decalSystem,
             });
         }
 

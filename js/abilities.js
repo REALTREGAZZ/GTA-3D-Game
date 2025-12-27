@@ -8,7 +8,7 @@ import { GAME_CONFIG } from './config.js';
 import { audioEngine } from './audio-engine.js';
 
 export function createAbilitySystem(player, scene, camera, gameState, options = {}) {
-    const { npcSystem = null, combatSystem = null, chaosCamera = null } = options;
+    const { npcSystem = null, combatSystem = null, chaosCamera = null, postProcessing = null } = options;
 
     const config = GAME_CONFIG.ABILITY_CONFIG?.GRAVITY_BLAST || {
         COOLDOWN: 5.0,
@@ -251,11 +251,15 @@ export function createAbilitySystem(player, scene, camera, gameState, options = 
                 npc.state.velocity.copy(impulseVector);
             }
 
-            // Enter suspension state
+            // Enter ragdoll (real airtime) + then freeze horizontal briefly (anticipation)
+            if (npc.enterRagdoll) {
+                const ragdollDuration = (GAME_CONFIG.COMBAT.RAGDOLL_DURATION || 2.0) + config.SUSPENSION_TIME;
+                npc.enterRagdoll(ragdollDuration, { playSound: false, showOverlay: false });
+            }
+
             if (npc.enterSuspension) {
                 npc.enterSuspension(config.SUSPENSION_TIME);
             } else {
-                // Fallback: manually set suspension state
                 npc.state.isSuspended = true;
                 npc.state.suspensionTimer = config.SUSPENSION_TIME;
             }
@@ -275,6 +279,9 @@ export function createAbilitySystem(player, scene, camera, gameState, options = 
 
         // Audio feedback - THWOOM impact
         audioEngine.playSynthSound('THWOOM', epicenter, config.IMPACT_AUDIO_VOLUME);
+
+        // Post-processing punch
+        postProcessing?.triggerChromaticAberration?.();
 
         // Camera effects
         if (chaosCamera && chaosCamera.applyFOVKick) {

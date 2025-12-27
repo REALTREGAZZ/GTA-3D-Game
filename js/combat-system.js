@@ -146,37 +146,47 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
     }
 
     // Apply knockback and ragdoll to NPC
-    function applyKnockbackToNPC(npc, direction, force) {
+    function applyKnockbackToNPC(npc, direction, force, options = {}) {
         if (!npc || !npc.state) return;
-        
+
+        const { attackType = 'MELEE' } = options;
+
         // Skip if NPC is already dead
         if (npc.state.state === 'DEAD') return;
-        
+
+        // HEAVY units ignore punch knockback (only Gravity Blast can yeet them)
+        if ((npc.state.type === 'HEAVY' || npc.type === 'HEAVY') && attackType === 'MELEE') {
+            return;
+        }
+
         // Calculate knockback velocity
         const knockbackDir = direction.clone().normalize();
         const knockbackVel = knockbackDir.multiplyScalar(force);
-        
+
         // Add some upward component for more dramatic effect
         knockbackVel.y = force * 0.4;
-        
+
         // Apply to NPC velocity
         if (npc.state.velocity) {
             npc.state.velocity.copy(knockbackVel);
         }
-        
+
         // Enter ragdoll state
         if (typeof npc.enterRagdoll === 'function') {
             const ragdollDuration = GAME_CONFIG.COMBAT.RAGDOLL_DURATION || 2.0;
             npc.enterRagdoll(ragdollDuration);
         }
-        
+
+        // Tiny dopamine tick for ragdoll entry
+        audioEngine.playSynthSound('PING', npc.mesh.position, 0.25);
+
         // Visual feedback - impact particles at hit location
         const impactPoint = npc.mesh.position.clone();
         impactPoint.y += 1.0;
-        createImpactParticles(impactPoint, 'MELEE');
-        
+        createImpactParticles(impactPoint, attackType);
+
         // Play BONK sound with dynamic intensity
-        const intensity = Math.min(1.5, force / 25); // Normalize force to intensity
+        const intensity = Math.min(1.5, force / 25);
         audioEngine.playSynthSound('BONK', npc.mesh.position, intensity);
     }
 
@@ -371,7 +381,7 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
 
         // Apply knockback and ragdoll
-        applyKnockbackToNPC(bestTarget, attackDir, knockbackForce);
+        applyKnockbackToNPC(bestTarget, attackDir, knockbackForce, { attackType: 'MELEE' });
 
         // Create damage number
         createDamageNumber(hitPoint, damage, 'MELEE');
@@ -743,7 +753,7 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                     npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
 
                     // Apply knockback and ragdoll
-                    applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce);
+                    applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce, { attackType: 'RANGED' });
 
                     // Play CRASH sound for bullet impact
                     const impactIntensity = Math.min(1.2, bullet.damage / 10);

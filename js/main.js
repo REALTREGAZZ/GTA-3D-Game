@@ -14,7 +14,8 @@ import {
     getPresetName,
     getLowerPreset,
     getHigherPreset,
-    SATIRICAL_TEXTS
+    SATIRICAL_TEXTS,
+    DOPAMINE_CONFIG
 } from './config.js';
 
 import { createWorld } from './world.js';
@@ -30,6 +31,11 @@ import { createNPCSystem } from './npc-system.js';
 import { createChaosCamera } from './chaos-camera.js';
 import { createAbilitySystem } from './abilities.js';
 import { audioEngine } from './audio-engine.js';
+
+import { createChaosScoreSystem } from './chaos-score.js';
+import { createWaveSystem } from './wave-system.js';
+import { createDecalSystem } from './decal-system.js';
+import { createPostProcessingEffects } from './post-processing.js';
 
 // ============================================
 // GAME STATE
@@ -260,6 +266,12 @@ let NPCPlayerProxy = null;
 let ChaosCamera = null;
 let AbilitySystem = null;
 
+// Dopamine Engine Systems
+let ChaosScoreSystem = null;
+let WaveSystem = null;
+let DecalSystem = null;
+let PostProcessing = null;
+
 // ============================================
 // COMBAT & REPLAY UI
 // ============================================
@@ -309,6 +321,12 @@ const UI = {
         weaponName: document.querySelector('.weapon-name'),
         ammoCount: document.querySelector('.ammo-count'),
         targetDistance: document.createElement('div'),
+    },
+    dopamine: {
+        comboContainer: document.getElementById('comboHud'),
+        comboText: document.getElementById('comboText'),
+        comboBarFill: document.getElementById('comboBarFill'),
+        waveText: document.getElementById('waveHud'),
     },
     menus: {
         pause: document.getElementById('pauseMenu'),
@@ -381,8 +399,9 @@ function initThreeWorld() {
     // Create NPC System
     NPCSystem = createNPCSystem({
         scene: World3D.scene,
-        maxNPCs: GraphicsState.currentPreset.npcMaxCount || 25,
-        spawnInterval: 12.0,
+        maxNPCs: Math.max(GraphicsState.currentPreset.npcMaxCount || 25, 40),
+        // Wave mode handles spawning; keep the ambient auto-spawn off.
+        spawnInterval: Number.POSITIVE_INFINITY,
         detectionRadius: 20,
         attackPlayerRadius: 2.2,
         fleePlayerRadius: 4.0,
@@ -391,8 +410,37 @@ function initThreeWorld() {
         terrainHeightAt: getTerrainHeightAt,
     });
 
-    // Initial spawn of NPCs
-    const initialNPCCount = Math.floor((GraphicsState.currentPreset.npcMaxCount || 25) * 0.4);
+    // Dopamine engine systems
+    DecalSystem = createDecalSystem(World3D.scene, DOPAMINE_CONFIG.DECAL_MAX_POOL);
+    PostProcessing = createPostProcessingEffects(World3D.renderer, World3D.scene, World3D.camera);
+    PostProcessing.setSize(window.innerWidth, window.innerHeight);
+
+    const dopamineUI = {
+        dopamine: UI.dopamine,
+        updateWaveDisplay: (waveNum) => {
+            if (UI?.dopamine?.waveText) {
+                UI.dopamine.waveText.textContent = `WAVE ${waveNum}`;
+            }
+        },
+        showMessage: (text) => {
+            OverlaySystem.show(text, 2.5, true);
+        },
+    };
+
+    ChaosScoreSystem = createChaosScoreSystem(GameState, dopamineUI, {
+        npcSystem: NPCSystem,
+        player: Player,
+    });
+
+    WaveSystem = createWaveSystem(World3D.scene, NPCSystem, GameState, dopamineUI, {
+        player: Player,
+        terrainHeightAt: getTerrainHeightAt,
+        spawnRadius: DOPAMINE_CONFIG.WAVE_SPAWN_RADIUS,
+        waveDelay: DOPAMINE_CONFIG.WAVE_SPAWN_DELAY,
+        maxWave: DOPAMINE_CONFIG.MAX_WAVES,
+    });
+
+    WaveSystem.startWaveMode();
 
     // Create combat system
     CombatUI.screenFlash = document.createElement('div');
@@ -481,6 +529,7 @@ function initThreeWorld() {
         npcSystem: NPCSystem,
         combatSystem: CombatSystem,
         chaosCamera: ChaosCamera,
+        postProcessing: PostProcessing,
     });
 
     // Set up death callback
@@ -670,8 +719,15 @@ function update(dt, rawDt = dt) {
             player: NPCPlayerProxy,
             camera: World3D.camera,
             feedback: GameState,
+            decalSystem: DecalSystem,
         });
     }
+
+    // Dopamine engine updates (use unscaled dt so hitstop doesn't stall UI)
+    ChaosScoreSystem?.update?.(rawDt);
+    WaveSystem?.update?.(rawDt);
+    DecalSystem?.update?.(rawDt);
+    PostProcessing?.update?.(rawDt);
 
     // Update debug stats
     if (DebugState.enabled) {
@@ -754,7 +810,11 @@ function render() {
         World3D.camera.position.add(shakeOffset);
     }
 
-    World3D.renderer.render(World3D.scene, World3D.camera);
+    if (PostProcessing?.render) {
+        PostProcessing.render();
+    } else {
+        World3D.renderer.render(World3D.scene, World3D.camera);
+    }
 
     if (hasShake) {
         World3D.camera.position.sub(shakeOffset);
@@ -1097,6 +1157,7 @@ function onWindowResize() {
 
     if (World3D) {
         World3D.resize(width, height);
+        PostProcessing?.setSize?.(width, height);
         return;
     }
 

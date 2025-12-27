@@ -501,11 +501,12 @@ export const GRAPHICS_CONFIG = {
 // ============================================
 export const GRAPHICS_PRESETS = {
     FLAT_COLORS: {
-        PLAYER: 0xFF6B6B,      
-        NPC_HOSTILE: 0xFF4444, 
-        GROUND: 0x8B9DC3,      
-        BUILDING: 0xC0A080,    
-        SKY: 0x87CEEB,         
+        PLAYER: 0xFF6B6B,
+        NPC_HOSTILE: 0xFF4444,
+        NPC_HEAVY: 0x6b1f1f,
+        GROUND: 0x8B9DC3,
+        BUILDING: 0xC0A080,
+        SKY: 0x87CEEB,
     },
     ULTRA: {
         name: 'ULTRA',
@@ -804,5 +805,33 @@ const SATIRICAL_TEXTS = {
 };
 
 export const COMBAT_CONFIG = GAME_CONFIG.COMBAT;
+
+// ============================================
+// DOPAMINE ENGINE CONFIG (Chaos Score + Waves + VFX)
+// ============================================
+export const DOPAMINE_CONFIG = {
+    // Chaos Score
+    COMBO_DECAY_TIME: 3.0,
+    POINTS_PER_NPC_IN_AIR: 10,
+    MULTIPLIER_COLOR_THRESHOLDS: {
+        0: 0xffff00,
+        10: 0xff8800,
+        25: 0xff0000,
+    },
+
+    // Wave System
+    WAVE_SPAWN_RADIUS: 30,
+    WAVE_SPAWN_DELAY: 10.0,
+    MAX_WAVES: 10,
+
+    // VFX
+    DECAL_MAX_POOL: 20,
+    DECAL_LIFETIME: 5.0,
+    DECAL_SPAWN_VELOCITY_THRESHOLD: 20.0,
+
+    // Post-Processing
+    CHROMATIC_ABERRATION_DURATION: 0.15,
+    CHROMATIC_ABERRATION_AMOUNT: 0.005,
+};
 
 export { SATIRICAL_TEXTS };
