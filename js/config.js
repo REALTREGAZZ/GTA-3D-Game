@@ -183,6 +183,20 @@ export const GAME_CONFIG = {
         // Death threshold
         DEATH_DAMAGE_THRESHOLD: 50,
     },
+
+    // Ability Settings
+    ABILITY_CONFIG: {
+        GRAVITY_BLAST: {
+            COOLDOWN: 5.0,
+            RADIUS: 5.0,
+            STRENGTH: 35.0,
+            UPWARD_FORCE: 40.0,
+            SUSPENSION_TIME: 0.5,
+            CHARGE_DURATION: 0.3,
+            CHARGE_AUDIO_VOLUME: 0.6,
+            IMPACT_AUDIO_VOLUME: 1.0,
+        },
+    },
 };
 
 // ============================================
@@ -385,6 +399,9 @@ export const INPUT_CONFIG = {
         AIM: ['Mouse1'],
         RELOAD: ['KeyR'],
         SWITCH_WEAPON: ['Tab', 'KeyQ'],
+        
+        // Abilities
+        ABILITY_GRAVITY_BLAST: ['KeyG'],
         
         // Camera
         ZOOM_IN: ['Equal', 'NumpadAdd'],

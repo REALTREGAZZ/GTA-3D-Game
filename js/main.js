@@ -28,6 +28,7 @@ import { createCombatSystem } from './combat-system.js';
 import { createReplaySystem } from './replay-system.js';
 import { createNPCSystem } from './npc-system.js';
 import { createChaosCamera } from './chaos-camera.js';
+import { createAbilitySystem } from './abilities.js';
 import { audioEngine } from './audio-engine.js';
 
 // ============================================
@@ -239,6 +240,9 @@ function updateScreenShake(rawDt) {
 GameState.applyHitstop = applyHitstop;
 GameState.applyScreenShake = applyScreenShake;
 
+// Make globally accessible for abilities
+window.applyScreenShake = applyScreenShake;
+
 // ============================================
 // THREE.JS WORLD STATE
 // ============================================
@@ -254,6 +258,7 @@ let ReplaySystem = null;
 let NPCSystem = null;
 let NPCPlayerProxy = null;
 let ChaosCamera = null;
+let AbilitySystem = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -471,6 +476,13 @@ function initThreeWorld() {
     // Create chaos camera system (cinematic FOV, tracking, kill cam)
     ChaosCamera = createChaosCamera();
 
+    // Create ability system (Gravity Blast, etc.)
+    AbilitySystem = createAbilitySystem(Player, World3D.scene, World3D.camera, GameState, {
+        npcSystem: NPCSystem,
+        combatSystem: CombatSystem,
+        chaosCamera: ChaosCamera,
+    });
+
     // Set up death callback
     GameState.onDeath = (deathEvent) => {
         GameState.isReplaying = true;
@@ -630,6 +642,11 @@ function update(dt, rawDt = dt) {
     // Update chaos camera (FOV kicks, tracking, kill cam)
     if (ChaosCamera) {
         ChaosCamera.update(rawDt, NPCSystem, World3D?.camera, PlayerCamera, GameState);
+    }
+
+    // Update ability system (Gravity Blast, etc.)
+    if (AbilitySystem) {
+        AbilitySystem.update(simDt);
     }
 
     // Update audio engine listener position
@@ -973,6 +990,14 @@ function setupInputHandlers() {
             e.preventDefault();
             if (CombatSystem) {
                 CombatSystem.switchWeapon();
+            }
+        }
+
+        // Gravity Blast (G)
+        if (e.code === 'KeyG' && !GameState.isPaused && !GameState.isReplaying && !GameState.playerControlsDisabled) {
+            e.preventDefault();
+            if (AbilitySystem) {
+                AbilitySystem.activateGravityBlast();
             }
         }
 
