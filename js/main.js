@@ -85,31 +85,37 @@ const ScreenShakeState = {
     targetOffset: new THREE.Vector3(),
 };
 
-// Overlay System for Satirical Texts
+// Overlay System for Satirical Texts - DOPAMINE ARCHITECTURE
 const OverlaySystem = {
     isShowing: false,
     currentText: '',
-    duration: 0,
     timer: 0,
+    lastChaosTime: 0,
     
-    show(text, duration = 3.0) {
-        if (this.isShowing) return; // No superponer textos
-        
-        const element = document.getElementById('satiricalText');
-        if (!element) return; // Safety check
+    show(text, duration = 2.5, isChaos = false) {
+        if (this.isShowing) return;
         
         this.isShowing = true;
         this.currentText = text;
-        this.duration = duration;
         this.timer = duration;
         
-        element.textContent = text;
+        const element = document.getElementById('satiricalText');
+        if (!element) return;
         
-        // Resetear animación
+        element.textContent = text;
+        element.classList.remove('chaos');
+        
+        if (isChaos) {
+            element.classList.add('chaos');
+        }
+        
+        // Reset animation
         element.style.animation = 'none';
-        setTimeout(() => {
-            element.style.animation = `textOverlay ${duration}s ease-in-out forwards`;
-        }, 10);
+        void element.offsetWidth; // Force reflow
+        
+        // Apply correct animation
+        const animName = isChaos ? 'satiricalPopCHAOS' : 'satiricalPop';
+        element.style.animation = `${animName} ${duration}s ease-out forwards`;
     },
     
     update(deltaTime) {
@@ -119,6 +125,12 @@ const OverlaySystem = {
                 this.isShowing = false;
             }
         }
+    },
+    
+    getRandomText(category) {
+        const texts = SATIRICAL_TEXTS[category];
+        if (!texts || texts.length === 0) return '';
+        return texts[Math.floor(Math.random() * texts.length)];
     },
 };
 
@@ -643,36 +655,48 @@ function update(dt, rawDt = dt) {
 function updateOverlayTriggers() {
     if (!NPCSystem || OverlaySystem.isShowing) return;
     
-    const activeNpcs = NPCSystem.state.active;
-    if (!activeNpcs || activeNpcs.length === 0) return;
+    const activeNpcs = NPCSystem.state?.active || [];
+    if (activeNpcs.length === 0) return;
     
     let ragdollCount = 0;
     let maxVelocity = 0;
+    let chaosThreshold = 3; // 3+ NPCs = CAOS
     
-    // Count ragdoll NPCs and find max velocity
     for (let npc of activeNpcs) {
-        if (npc.state && npc.state.isRagdoll) {
+        if (npc.getState && npc.getState().isRagdoll) {
             ragdollCount++;
         }
-        const vel = npc.state?.velocity?.length() || 0;
+        const vel = (npc.getState && npc.getState().velocity?.length()) || 0;
         if (vel > maxVelocity) maxVelocity = vel;
     }
     
-    // Show chaos text if 3+ NPCs in ragdoll
-    if (ragdollCount >= 3) {
-        const chaosText = SATIRICAL_TEXTS.CHAOS[
-            Math.floor(Math.random() * SATIRICAL_TEXTS.CHAOS.length)
-        ];
-        OverlaySystem.show(chaosText, 2.5);
+    // CAOS EXTREMO: Usar animación CHAOS más loca
+    if (ragdollCount >= chaosThreshold) {
+        OverlaySystem.show(
+            OverlaySystem.getRandomText('CHAOS'), 
+            3.0, 
+            true  // ← isChaos = true (usa animación más loca)
+        );
         return;
     }
     
-    // Show high velocity text if any NPC is moving extremely fast
-    if (maxVelocity > 20) {
-        const velocityText = SATIRICAL_TEXTS.HIGH_VELOCITY[
-            Math.floor(Math.random() * SATIRICAL_TEXTS.HIGH_VELOCITY.length)
-        ];
-        OverlaySystem.show(velocityText, 2.0);
+    // Velocidad extrema
+    if (maxVelocity > 25 && !OverlaySystem.isShowing) {
+        OverlaySystem.show(OverlaySystem.getRandomText('HIGH_VELOCITY'), 2.0, false);
+    }
+    
+    // Friendly Fire: NPC chain detection
+    if (activeNpcs.length >= 2 && !OverlaySystem.isShowing) {
+        for (let npc of activeNpcs) {
+            const npcState = npc.getState ? npc.getState() : null;
+            if (npcState && npcState.lastAttacker && npcState.lastAttacker.isNPC) {
+                // Two NPCs fighting each other
+                if (Math.random() < 0.1) { // 10% chance per frame while fighting
+                    OverlaySystem.show(OverlaySystem.getRandomText('NPC_CHAIN'), 2.0, false);
+                    break;
+                }
+            }
+        }
     }
 }
 

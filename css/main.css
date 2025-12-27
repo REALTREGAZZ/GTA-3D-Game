@@ -923,9 +923,8 @@ body {
 }
 
 /* ============================================
-    SATIRICAL OVERLAY
-    ============================================ */
-
+   SATIRICAL TEXT OVERLAY - DOPAMINE ARCHITECTURE
+   ============================================ */
 .satirical-overlay {
     position: fixed;
     top: 50%;
@@ -936,34 +935,80 @@ body {
 }
 
 #satiricalText {
-    font-size: 3rem;
-    font-weight: bold;
-    color: #fff;
-    text-shadow: 3px 3px 0px #000, -3px -3px 0px #000;
-    font-family: Arial, sans-serif;
+    /* TIPOGRAFÍA: El Grito del Meme */
+    font-family: "Impact", "Arial Black", sans-serif;
+    font-size: 4.5rem;
+    font-weight: 900;
+    letter-spacing: 2px;
+    
+    /* COLOR: Blanco puro con borde negro GRUESO */
+    color: #FFFFFF;
+    text-shadow: 
+        -4px -4px 0px #000000,
+        4px -4px 0px #000000,
+        -4px 4px 0px #000000,
+        4px 4px 0px #000000,
+        -2px 0px 0px #000000,
+        2px 0px 0px #000000,
+        0px -2px 0px #000000,
+        0px 2px 0px #000000;
+    
+    /* LAYOUT */
     text-align: center;
     margin: 0;
     white-space: nowrap;
+    line-height: 1;
     
-    /* Animación: fade in, stay, fade out */
-    animation: textOverlay 3s ease-in-out forwards;
+    /* ANIMACIÓN: Pop + Fade (Impacto Dopamina) */
+    animation: satiricalPop 2.5s ease-out forwards;
 }
 
-@keyframes textOverlay {
+/* POP ANIMATION: Scale 0.8 → 1.2 → 1 + Fade */
+@keyframes satiricalPop {
     0% {
         opacity: 0;
-        transform: scale(0.5);
+        transform: scale(0.5) rotateZ(-5deg);
+    }
+    
+    /* IMPACTO: El texto explota hacia arriba */
+    25% {
+        opacity: 1;
+        transform: scale(1.3) rotateZ(0deg);
+    }
+    
+    /* SUSTAIN: Mantén el impacto */
+    50% {
+        opacity: 1;
+        transform: scale(1.0) rotateZ(0deg);
+    }
+    
+    /* FADE: Desaparece lentamente */
+    100% {
+        opacity: 0;
+        transform: scale(0.8) rotateZ(2deg);
+    }
+}
+
+/* VARIANTE: Para textos de caos extremo (opcional) */
+#satiricalText.chaos {
+    animation: satiricalPopCHAOS 3s ease-out forwards;
+}
+
+@keyframes satiricalPopCHAOS {
+    0% {
+        opacity: 0;
+        transform: scale(0.3) rotateZ(-10deg);
     }
     20% {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1.4) rotateZ(3deg);
     }
-    80% {
+    50% {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1.0) rotateZ(0deg);
     }
     100% {
         opacity: 0;
-        transform: scale(0.8);
+        transform: scale(0.7) rotateZ(-2deg);
     }
 }

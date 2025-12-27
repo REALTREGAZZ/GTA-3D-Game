@@ -155,6 +155,14 @@ export function createNPC(position = new THREE.Vector3()) {
         
         // Visual feedback: flash white or different color
         body.material.color.setHex(0xaaaaaa);
+
+        // Show satirical ragdoll text
+        if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+            const ragdollText = SATIRICAL_TEXTS.RAGDOLL[
+                Math.floor(Math.random() * SATIRICAL_TEXTS.RAGDOLL.length)
+            ];
+            OverlaySystem.show(ragdollText, 2.0);
+        }
     }
 
     function exitRagdoll() {
@@ -256,6 +264,14 @@ export function createNPC(position = new THREE.Vector3()) {
         body.material.color.setHex(0x555555);
         head.material.color.setHex(0x555555);
         indicator.visible = false;
+
+        // Show satirical death text
+        if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+            const deathText = SATIRICAL_TEXTS.DEATH[
+                Math.floor(Math.random() * SATIRICAL_TEXTS.DEATH.length)
+            ];
+            OverlaySystem.show(deathText, 2.5);
+        }
     }
 
     function update(dt, allNPCs, buildings, context = {}) {
