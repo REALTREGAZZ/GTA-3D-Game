@@ -284,7 +284,33 @@ export function createAbilitySystem(player, scene, camera, gameState, options = 
 
             // Show satirical text if high count
             if (affectedNPCs.length >= 10 && window.OverlaySystem) {
-                window.OverlaySystem.show('CHAOS UNLEASHED', 2.0, true);
+               window.OverlaySystem.show('CHAOS UNLEASHED', 2.0, true);
+            }
+
+            // Trigger viral factory effects for Gravity Blast
+            if (window.DopaminePopupSystem) {
+                window.DopaminePopupSystem.spawn(npc.mesh.position, 'YEET');
+            }
+        }
+
+        // Trigger epic viral effects for massive Gravity Blasts
+        if (affectedNPCs.length >= 5) {
+            // Trigger camera zoom
+            if (camera.triggerImpactZoom) {
+                camera.triggerImpactZoom(1.2, 0.15);
+            }
+
+            // Trigger time freeze
+            if (window.GlobalTimeFreeze) {
+                window.GlobalTimeFreeze.slowMotion(0.1, 0.15);
+            }
+
+            // Trigger epic dopamine popups
+            if (window.DopaminePopupSystem) {
+                window.DopaminePopupSystem.spawn(epicenter, 'MEGA_YEET');
+                if (affectedNPCs.length >= 8) {
+                    window.DopaminePopupSystem.spawn(epicenter.clone().add(new THREE.Vector3(3, 0, 0)), 'OCTUPLE_BONK');
+                }
             }
         }
 

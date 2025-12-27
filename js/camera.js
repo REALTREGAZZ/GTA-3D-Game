@@ -53,6 +53,10 @@ export function createThirdPersonCamera(camera, player) {
 
     camera.position.copy(state.currentPosition);
     camera.lookAt(state.currentLookAt);
+    
+    // Initialize zoom to 1.0 (no zoom)
+    camera.zoom = 1.0;
+    camera.updateProjectionMatrix();
 
     // Setup pointer lock for mouse control (optional)
     function enableMouseControl(canvas) {
@@ -79,6 +83,17 @@ export function createThirdPersonCamera(camera, player) {
         state.shakeDuration = Math.max(state.shakeDuration, duration);
         state.shakeTime = duration;
     }
+    
+    function triggerImpactZoom(zoomFactor = 1.15, duration = 0.1) {
+        state.impactZoomTarget = zoomFactor;
+        state.impactZoomDuration = duration;
+        state.impactZoomTimer = duration;
+    }
+    
+    // Initialize zoom state
+    state.impactZoomTarget = 1.0;
+    state.impactZoomDuration = 0;
+    state.impactZoomTimer = 0;
 
     function updateShake(deltaTime) {
         if (state.shakeTime > 0) {
@@ -127,6 +142,21 @@ export function createThirdPersonCamera(camera, player) {
         // Update shake and recoil first
         updateShake(deltaTime);
         updateRecoil(deltaTime);
+
+        // Update impact zoom
+        if (state.impactZoomTimer > 0) {
+            state.impactZoomTimer -= deltaTime;
+            
+            const progress = 1 - (state.impactZoomTimer / state.impactZoomDuration);
+            const currentZoom = THREE.MathUtils.lerp(1.0, state.impactZoomTarget, progress);
+            
+            camera.zoom = currentZoom;
+            camera.updateProjectionMatrix();
+            
+            if (state.impactZoomTimer <= 0) {
+                state.impactZoomTarget = 1.0;
+            }
+        }
 
         // In replay mode, use replay camera
         if (state.isReplayMode) {
@@ -260,6 +290,7 @@ export function createThirdPersonCamera(camera, player) {
         enableMouseControl,
         toggleMouseControl,
         addShake,
+        triggerImpactZoom,
         enterReplayMode,
         updateReplayCamera,
         exitReplayMode,

@@ -40,6 +40,9 @@ import { createDecalSystem } from './decal-system.js';
 import { createPostProcessingEffects } from './post-processing.js';
 import { createTrailsSystem } from './trails-system.js';
 import { createDustEmitterSystem } from './dust-emitter.js';
+import { GlobalTimeFreeze } from './time-freeze.js';
+import { createChaosMonitor } from './chaos-monitor.js';
+import { createDopaminePopupSystem } from './dopamine-popups.js';
 
 // ============================================
 // GAME STATE
@@ -280,6 +283,10 @@ let PostProcessing = null;
 let TrailsSystem = null;
 let DustEmitterSystem = null;
 let PerformanceMonitor = null;
+
+// Viral Factory Systems
+let ChaosMonitor = null;
+let DopaminePopupSystem = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -524,6 +531,10 @@ function initThreeWorld() {
     NPCSystem.setTrailsSystem(TrailsSystem);
     NPCSystem.setDustEmitterSystem(DustEmitterSystem);
 
+    // Viral Factory systems
+    DopaminePopupSystem = createDopaminePopupSystem(World3D.scene, World3D.camera);
+    ChaosMonitor = createChaosMonitor();
+
     const dopamineUI = {
         dopamine: UI.dopamine,
         updateWaveDisplay: (waveNum) => {
@@ -767,6 +778,9 @@ function update(dt, rawDt = dt) {
         return;
     }
 
+    // Update time freeze system
+    GlobalTimeFreeze.update(rawDt);
+
     // Combat can trigger hitstop mid-frame (e.g. bullet impacts). If that happens,
     // we recompute simDt so the rest of the simulation freezes immediately.
     if (CombatSystem) {
@@ -777,24 +791,35 @@ function update(dt, rawDt = dt) {
     // Update world time (scaled)
     updateWorldTime(simDt);
 
+    // Apply time freeze multiplier to scaled delta time
+    const timeScaleFinal = GameState.timeScale * GlobalTimeFreeze.factor;
+    const finalDt = rawDt * timeScaleFinal;
+
     // Update player (scaled)
     if (Player && Buildings && PlayerCamera && !GameState.playerControlsDisabled) {
         // Get terrain height at player position
         const playerPos = Player.getPosition();
         const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
         Player.setColliders(Buildings.colliders);
-        Player.update(simDt, Keys, Buildings.colliders, groundHeight, PlayerCamera.state.horizontalAngle);
+        Player.update(finalDt, Keys, Buildings.colliders, groundHeight, PlayerCamera.state.horizontalAngle);
     }
 
     // Update animations (scaled)
     if (AnimationController && Player) {
-        AnimationController.update(simDt, Player.getState());
+        AnimationController.update(finalDt, Player.getState());
     }
 
     // Update camera (unscaled so input/camera remains responsive during hitstop)
     // Skip normal camera update if in kill cam (chaos camera takes over)
     if (PlayerCamera && Player && (!ChaosCamera || !ChaosCamera.state.isInKillCam)) {
         PlayerCamera.update(rawDt, Mouse);
+        
+        // Apply cinematic camera movement if in cinematic mode
+        if (ChaosMonitor && ChaosMonitor.getState().isInCinematicMode) {
+            const chaosState = ChaosMonitor.getState();
+            const smoothFactor = 0.15;  // Slower, more cinematic
+            PlayerCamera.camera.position.lerp(chaosState.targetPos, smoothFactor);
+        }
     }
 
     // Update chaos camera (FOV kicks, tracking, kill cam)
@@ -804,7 +829,7 @@ function update(dt, rawDt = dt) {
 
     // Update ability system (Gravity Blast, etc.)
     if (AbilitySystem) {
-        AbilitySystem.update(simDt);
+        AbilitySystem.update(finalDt);
     }
 
     // Update audio engine listener position
@@ -824,7 +849,7 @@ function update(dt, rawDt = dt) {
 
     // Update NPC System (scaled)
     if (NPCSystem && Player) {
-        NPCSystem.update(simDt, {
+        NPCSystem.update(finalDt, {
             player: NPCPlayerProxy,
             camera: World3D.camera,
             feedback: GameState,
@@ -837,6 +862,14 @@ function update(dt, rawDt = dt) {
     WaveSystem?.update?.(rawDt);
     DecalSystem?.update?.(rawDt);
     PostProcessing?.update?.(rawDt);
+
+    // Viral Factory updates
+    if (ChaosMonitor) {
+        ChaosMonitor.update(rawDt, NPCSystem, PlayerCamera, Player);
+    }
+    if (DopaminePopupSystem) {
+        DopaminePopupSystem.update(rawDt);
+    }
 
     // Juice Sprint updates
     if (TrailsSystem && TrailsSystem.update) TrailsSystem.update(rawDt);
