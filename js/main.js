@@ -27,6 +27,7 @@ import { createAnimationController } from './animations.js';
 import { createCombatSystem } from './combat-system.js';
 import { createReplaySystem } from './replay-system.js';
 import { createNPCSystem } from './npc-system.js';
+import { createChaosCamera } from './chaos-camera.js';
 
 // ============================================
 // GAME STATE
@@ -49,6 +50,8 @@ const GameState = {
         currentMission: 'Bienvenido a la ciudad',
         currentWeapon: 'MELEE',
         lastDamageTime: 0,
+        lastAttacker: null, // For kill cam - who killed the player
+        playerControlsDisabled: false, // For kill cam - disable input
     },
 
     // Combat Stats
@@ -249,6 +252,7 @@ let CombatSystem = null;
 let ReplaySystem = null;
 let NPCSystem = null;
 let NPCPlayerProxy = null;
+let ChaosCamera = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -443,9 +447,9 @@ function initThreeWorld() {
     // Player proxy used by NPC AI (so NPCs can find + damage player via CombatSystem)
     NPCPlayerProxy = {
         getPosition: () => Player.getPosition(),
-        takeDamage: (amount, direction) => {
+        takeDamage: (amount, direction, attacker) => {
             if (CombatSystem?.damagePlayerFromNPC) {
-                CombatSystem.damagePlayerFromNPC(amount, direction);
+                CombatSystem.damagePlayerFromNPC(amount, direction, attacker);
                 return;
             }
 
@@ -462,6 +466,9 @@ function initThreeWorld() {
 
     // Create replay system
     ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
+
+    // Create chaos camera system (cinematic FOV, tracking, kill cam)
+    ChaosCamera = createChaosCamera();
 
     // Set up death callback
     GameState.onDeath = (deathEvent) => {
@@ -481,6 +488,8 @@ function initThreeWorld() {
         const spawnPos = new THREE.Vector3(0, 5, 0);
         Player.respawn(spawnPos);
         CombatSystem.reset();
+        // Reset chaos camera state
+        ChaosCamera.reset();
     });
 
     // Now spawn initial NPCs after everything is initialized
@@ -595,7 +604,7 @@ function update(dt, rawDt = dt) {
     updateWorldTime(simDt);
 
     // Update player (scaled)
-    if (Player && Buildings && PlayerCamera) {
+    if (Player && Buildings && PlayerCamera && !GameState.playerControlsDisabled) {
         // Get terrain height at player position
         const playerPos = Player.getPosition();
         const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
@@ -609,8 +618,14 @@ function update(dt, rawDt = dt) {
     }
 
     // Update camera (unscaled so input/camera remains responsive during hitstop)
-    if (PlayerCamera && Player) {
+    // Skip normal camera update if in kill cam (chaos camera takes over)
+    if (PlayerCamera && Player && (!ChaosCamera || !ChaosCamera.state.isInKillCam)) {
         PlayerCamera.update(rawDt, Mouse);
+    }
+
+    // Update chaos camera (FOV kicks, tracking, kill cam)
+    if (ChaosCamera) {
+        ChaosCamera.update(rawDt, NPCSystem, World3D?.camera, PlayerCamera, GameState);
     }
 
     // Update sky + lighting based on time of day
@@ -971,6 +986,16 @@ function setupInputHandlers() {
                 }
             }
         }
+
+        // Kill cam restart
+        if (ChaosCamera && ChaosCamera.state.isInKillCam) {
+            if (e.code === 'Space') {
+                // Restart immediately
+                if (ChaosCamera.restartGame) {
+                    ChaosCamera.restartGame();
+                }
+            }
+        }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -979,6 +1004,12 @@ function setupInputHandlers() {
 
     // Mouse events
     window.addEventListener('mousemove', (e) => {
+        // Disable mouse look during kill cam
+        if (ChaosCamera && ChaosCamera.state.isInKillCam) {
+            Mouse.deltaX = 0;
+            Mouse.deltaY = 0;
+            return;
+        }
         Mouse.deltaX = e.movementX;
         Mouse.deltaY = e.movementY;
         Mouse.x = e.clientX;
@@ -987,6 +1018,8 @@ function setupInputHandlers() {
 
     window.addEventListener('mousedown', (e) => {
         if (GameState.isPaused || GameState.isReplaying) return;
+        // Disable attacks during kill cam
+        if (ChaosCamera && ChaosCamera.state.isInKillCam) return;
 
         if (e.button === 0) {
             Mouse.leftDown = true;

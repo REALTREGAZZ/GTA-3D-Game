@@ -252,6 +252,26 @@ export const CAMERA_CONFIG = {
         MOUSE_SENSITIVITY: 0.005,
         AUTO_FOLLOW: true,
         AUTO_FOLLOW_DELAY: 2.0,
+    },
+
+    // Chaos Camera (Cinematic FOV & Tracking)
+    CHAOS_CAMERA: {
+        FOV_NORMAL: 60,
+        FOV_KICK_SINGLE: 50,
+        FOV_KICK_DOUBLE: 45,
+        FOV_KICK_TRIPLE: 40,
+        FOV_KICK_DURATION: 0.5,
+        FOV_RECOVERY_SPEED: 0.05,
+
+        TRACKING_DISTANCE: 5,
+        TRACKING_HEIGHT: 3,
+        TRACKING_SMOOTHING: 0.1,
+
+        KILLCAM_DURATION: 3.0,
+        KILLCAM_ROTATION_SPEED: 60, // Grados por segundo
+        KILLCAM_DISTANCE: 6,
+        KILLCAM_HEIGHT: 2,
+        KILLCAM_SLOW_MOTION: 0.1, // 10% timeScale
     }
 };
 
