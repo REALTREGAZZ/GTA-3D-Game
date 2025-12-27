@@ -315,7 +315,6 @@ export function createNPC(position = new THREE.Vector3()) {
                 state.isDizzy = true;
                 state.dizzyTimer = state.dizzyDuration;
                 state.punches_received = 0;
-                console.log('Heavy NPC is now DIZZY!');
 
                 // Visual feedback for Dizzy state
                 setVisualColor(new THREE.Color(0xff6666));
@@ -633,7 +632,6 @@ export function createNPC(position = new THREE.Vector3()) {
             if (state.dizzyTimer <= 0) {
                 state.isDizzy = false;
                 setVisualColor(state.baseColor);
-                console.log('Heavy NPC recovered from Dizzy state');
             } else {
                 // Visual feedback: wobble effect during Dizzy
                 const wobble = Math.sin(state.dizzyTimer * 20) * 0.1;

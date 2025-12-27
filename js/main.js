@@ -10,6 +10,7 @@ import {
     DEBUG_CONFIG,
     GRAPHICS_PRESETS,
     WAVE_SYSTEM_CONFIG,
+    JUICE_SPRINT_CONFIG,
     getActivePreset,
     saveGraphicsPreset,
     getPresetName,
