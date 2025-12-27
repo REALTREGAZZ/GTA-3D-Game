@@ -76,11 +76,6 @@ export function createDustEmitterSystem(scene, maxDust = 50) {
                     dustParticles.splice(i, 1);
                 }
             }
-
-            // Debug logging for pool size (throttled)
-            if (Math.random() < 0.01) {
-                console.log(`Dust pool size: ${activeDustCount} / ${config.MAX_PARTICLES}`);
-            }
         },
 
         getActiveCount() {
