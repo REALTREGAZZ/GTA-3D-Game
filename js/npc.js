@@ -4,7 +4,7 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS } from './config.js';
+import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS, DOPAMINE_CONFIG } from './config.js';
 import { applyToonMaterial } from './world.js';
 import { audioEngine } from './audio-engine.js';
 
@@ -51,6 +51,16 @@ export function createNPC(position = new THREE.Vector3()) {
     head.position.y = bodyHeight + radius * 1.55;
     group.add(head);
 
+    // HEAVY variant visual (dark cube, immune to punch knockback)
+    const heavyGeometry = new THREE.BoxGeometry(radius * 2.6, bodyHeight * 1.9, radius * 2.6);
+    const heavyCube = new THREE.Mesh(heavyGeometry);
+    applyToonMaterial(heavyCube, 'NPC_HEAVY', 1.08);
+    heavyCube.castShadow = true;
+    heavyCube.receiveShadow = true;
+    heavyCube.position.y = bodyHeight * 0.95 + radius * 0.6;
+    heavyCube.visible = false;
+    group.add(heavyCube);
+
     const indicatorGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.35);
     const indicatorMaterial = new THREE.MeshToonMaterial({
         color: 0x222222,
@@ -64,6 +74,7 @@ export function createNPC(position = new THREE.Vector3()) {
     const state = {
         id: `npc_${Math.random().toString(16).slice(2)}`,
         active: true,
+        type: 'BASIC',
         health: 60,
         maxHealth: 60,
         state: NPC_STATES.WANDER,
@@ -97,10 +108,59 @@ export function createNPC(position = new THREE.Vector3()) {
         // Suspension state (for Gravity Blast)
         isSuspended: false,
         suspensionTimer: 0,
+        suspendedVelocity: new THREE.Vector3(),
+
+        // VFX - ground impact decals
+        decalCooldown: 0,
 
         // Collision feedback
         collisionShakeCooldown: 0,
     };
+
+    const BASIC_MAX_HEALTH = 60;
+    const HEAVY_MAX_HEALTH = 150;
+
+    const BASIC_COLOR = new THREE.Color(GRAPHICS_PRESETS.FLAT_COLORS.NPC_HOSTILE);
+    const HEAVY_COLOR = new THREE.Color(GRAPHICS_PRESETS.FLAT_COLORS.NPC_HEAVY);
+
+    function getVisualMeshes() {
+        return state.type === 'HEAVY' ? [heavyCube] : [body, head];
+    }
+
+    function setVisualColor(color) {
+        const meshes = getVisualMeshes();
+        for (let i = 0; i < meshes.length; i++) {
+            meshes[i].material.color.copy(color);
+        }
+    }
+
+    function applyType(type = 'BASIC') {
+        state.type = type === 'HEAVY' ? 'HEAVY' : 'BASIC';
+
+        const isHeavy = state.type === 'HEAVY';
+        body.visible = !isHeavy;
+        head.visible = !isHeavy;
+        heavyCube.visible = isHeavy;
+
+        if (isHeavy) {
+            group.scale.setScalar(1.5);
+            state.maxHealth = HEAVY_MAX_HEALTH;
+            indicator.material.color.setHex(0x330000);
+            state.baseColor.copy(HEAVY_COLOR);
+            setVisualColor(HEAVY_COLOR);
+        } else {
+            group.scale.setScalar(1.0);
+            state.maxHealth = BASIC_MAX_HEALTH;
+            indicator.material.color.setHex(0x222222);
+            state.baseColor.copy(BASIC_COLOR);
+            setVisualColor(BASIC_COLOR);
+        }
+
+        state.health = state.maxHealth;
+    }
+
+    // Default type
+    applyType('BASIC');
 
     function getPosition() {
         return group.position.clone();
@@ -115,8 +175,9 @@ export function createNPC(position = new THREE.Vector3()) {
         }
     }
 
-    function reset(newPosition) {
-        state.health = state.maxHealth;
+    function reset(newPosition, options = {}) {
+        applyType(options.type || 'BASIC');
+
         state.state = NPC_STATES.WANDER;
         state.velocity.set(0, 0, 0);
         state.desiredDir.copy(pickRandomXZDirection());
@@ -129,44 +190,53 @@ export function createNPC(position = new THREE.Vector3()) {
         state.targetPlayer = null;
         state.dieTimer = 0;
         state.despawnTimer = 0;
+
         state.isRagdoll = false;
         state.ragdollTimer = 0;
         state.savedState = null;
         state.justEnteredRagdoll = false;
         state.ragdollImpactSpeed = 0;
+
+        state.isSuspended = false;
+        state.suspensionTimer = 0;
+        state.suspendedVelocity.set(0, 0, 0);
+
+        state.decalCooldown = 0;
         state.collisionShakeCooldown = 0;
-        
+
         // Furia System reset
         state.lastAttacker = null;
         state.lastHitTime = 0;
         state.furia = 0;
-        
-        body.material.color.copy(state.baseColor);
-        head.material.color.copy(state.baseColor);
+
+        indicator.visible = true;
+        setVisualColor(state.baseColor);
         group.rotation.set(0, 0, 0);
         group.position.copy(newPosition);
         setActive(true);
     }
 
-    function enterRagdoll(duration) {
+    function enterRagdoll(duration, options = {}) {
         if (state.state === NPC_STATES.DEAD) return;
-        
+
+        const { playSound = true, showOverlay = true } = options;
+
         // Save current state to restore later
         state.savedState = state.state;
         state.isRagdoll = true;
         state.ragdollTimer = duration;
         state.justEnteredRagdoll = true;
         state.ragdollImpactSpeed = state.velocity.length();
-        
-        // Visual feedback: flash white or different color
-        body.material.color.setHex(0xaaaaaa);
 
-        // Play ARGH sound (pain/grunt)
-        const intensity = Math.min(1.0, state.ragdollImpactSpeed / 15);
-        audioEngine.playSynthSound('ARGH', group.position, 0.7 + intensity * 0.3);
+        // Visual feedback
+        setVisualColor(new THREE.Color(0xaaaaaa));
 
-        // Show satirical ragdoll text
-        if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
+        if (playSound) {
+            const intensity = Math.min(1.0, state.ragdollImpactSpeed / 15);
+            audioEngine.playSynthSound('ARGH', group.position, 0.7 + intensity * 0.3);
+        }
+
+        if (showOverlay && typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
             const ragdollText = SATIRICAL_TEXTS.RAGDOLL[
                 Math.floor(Math.random() * SATIRICAL_TEXTS.RAGDOLL.length)
             ];
@@ -186,17 +256,23 @@ export function createNPC(position = new THREE.Vector3()) {
         group.rotation.set(0, group.rotation.y, 0);
         
         // Restore color
-        body.material.color.copy(state.baseColor);
+        setVisualColor(state.baseColor);
     }
 
     function enterSuspension(duration) {
         state.isSuspended = true;
         state.suspensionTimer = duration;
+        state.suspendedVelocity.set(state.velocity.x, 0, state.velocity.z);
     }
 
     function exitSuspension() {
         state.isSuspended = false;
         state.suspensionTimer = 0;
+
+        // Restore the stored horizontal impulse after the freeze
+        state.velocity.x = state.suspendedVelocity.x;
+        state.velocity.z = state.suspendedVelocity.z;
+        state.suspendedVelocity.set(0, 0, 0);
     }
 
     function takeDamage(amount, source = null, impulse = 0) {
@@ -206,7 +282,7 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastDamageTime = 0;
         state.lastDamagedBy = source;
 
-        body.material.color.setHex(0xffffff);
+        setVisualColor(new THREE.Color(0xffffff));
 
         // Furia System: Register last attacker and set furia if impulse is significant
         const IMPULSE_THRESHOLD = GAME_CONFIG.COMBAT.FURIA?.IMPULSE_THRESHOLD || 5.0;
@@ -280,8 +356,7 @@ export function createNPC(position = new THREE.Vector3()) {
         state.dieTimer = 0;
         state.velocity.set(0, 0, 0);
 
-        body.material.color.setHex(0x555555);
-        head.material.color.setHex(0x555555);
+        setVisualColor(new THREE.Color(0x555555));
         indicator.visible = false;
 
         // Play ARGH sound (death scream - maximum intensity)
@@ -307,6 +382,7 @@ export function createNPC(position = new THREE.Vector3()) {
             fleePlayerRadius = 4.0,
             detectionRadius = 20,
             feedback = null,
+            decalSystem = null,
         } = context;
 
         if (typeof isInView === 'function' && !isInView(group.position)) {
@@ -320,6 +396,7 @@ export function createNPC(position = new THREE.Vector3()) {
 
         state.lastDamageTime += dt;
         state.collisionShakeCooldown = Math.max(0, state.collisionShakeCooldown - dt);
+        state.decalCooldown = Math.max(0, state.decalCooldown - dt);
 
         // Furia System: Update furia timer
         if (state.furia > 0) {
@@ -350,10 +427,25 @@ export function createNPC(position = new THREE.Vector3()) {
             const gravity = GAME_CONFIG.COMBAT.RAGDOLL_GRAVITY_SCALE || 1.2;
             state.velocity.y -= 9.8 * gravity * dt;
             
-            // Apply friction to horizontal movement
-            const friction = GAME_CONFIG.COMBAT.KNOCKBACK_FRICTION || 0.92;
-            state.velocity.x *= Math.pow(friction, dt * 60);
-            state.velocity.z *= Math.pow(friction, dt * 60);
+            // Suspension during ragdoll (Gravity Blast anticipation): freeze horizontal, then restore
+            let stillSuspended = state.isSuspended;
+            if (stillSuspended) {
+                state.suspensionTimer -= dt;
+                if (state.suspensionTimer <= 0) {
+                    exitSuspension();
+                    stillSuspended = false;
+                }
+            }
+
+            if (stillSuspended) {
+                state.velocity.x = 0;
+                state.velocity.z = 0;
+            } else {
+                // Apply friction to horizontal movement
+                const friction = GAME_CONFIG.COMBAT.KNOCKBACK_FRICTION || 0.92;
+                state.velocity.x *= Math.pow(friction, dt * 60);
+                state.velocity.z *= Math.pow(friction, dt * 60);
+            }
             
             // Move with physics
             group.position.add(state.velocity.clone().multiplyScalar(dt));
@@ -382,12 +474,27 @@ export function createNPC(position = new THREE.Vector3()) {
                 }
             }
             
-            // Snap to ground
+            // Snap to ground + impact decals
             if (typeof terrainHeightAt === 'function') {
                 const groundY = terrainHeightAt(group.position.x, group.position.z);
-                if (group.position.y < groundY + 1.0) {
-                    group.position.y = groundY + 1.0;
-                    // Stop falling when hitting ground
+                const desiredY = groundY + 1.0;
+
+                if (group.position.y < desiredY) {
+                    const impactSpeed = -state.velocity.y;
+
+                    if (
+                        decalSystem &&
+                        state.decalCooldown <= 0 &&
+                        impactSpeed > (DOPAMINE_CONFIG.DECAL_SPAWN_VELOCITY_THRESHOLD || 20.0)
+                    ) {
+                        decalSystem.spawnDecal(
+                            new THREE.Vector3(group.position.x, groundY, group.position.z),
+                            DOPAMINE_CONFIG.DECAL_LIFETIME || 5.0
+                        );
+                        state.decalCooldown = 0.2;
+                    }
+
+                    group.position.y = desiredY;
                     if (state.velocity.y < 0) {
                         state.velocity.y = 0;
                     }
@@ -460,7 +567,7 @@ export function createNPC(position = new THREE.Vector3()) {
 
         // Visual hit flash decay
         if (state.lastDamageTime > 0.08) {
-            body.material.color.copy(state.baseColor);
+            setVisualColor(state.baseColor);
             indicator.material.emissiveIntensity = 0.25;
             indicator.visible = state.state !== NPC_STATES.DEAD;
         }
@@ -744,6 +851,7 @@ export function createNPC(position = new THREE.Vector3()) {
     Object.defineProperties(api, {
         position: { get: () => group.position },
         health: { get: () => state.health },
+        type: { get: () => state.type },
         targetNPC: { get: () => state.targetNPC },
         velocity: { get: () => state.velocity },
     });

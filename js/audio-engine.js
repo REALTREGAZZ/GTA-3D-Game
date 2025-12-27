@@ -208,6 +208,11 @@ class AudioEngine {
                 this.registerSound(gainNode, priority, 0.4);
                 break;
 
+            case 'PING':
+                this.synthesizePing(ctx, gainNode, now, dynamicVolume, spatial.volume, masterVolume, pitchVariation);
+                this.registerSound(gainNode, priority, 0.08);
+                break;
+
             default:
                 console.warn(`Unknown sound type: ${type}`);
         }
@@ -435,6 +440,29 @@ class AudioEngine {
         osc.connect(gainNode);
         osc.start(now);
         osc.stop(now + 0.4);
+    }
+
+    /**
+     * PING - Combo tick (short dopamine blip)
+     * Triangle wave: ~900Hz, 60-80ms
+     */
+    synthesizePing(ctx, gainNode, now, dynamicVolume, spatialVolume, masterVolume, pitchVar) {
+        const baseVolume = 0.35 * masterVolume * spatialVolume * dynamicVolume;
+
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+
+        const freq = (850 + Math.random() * 250) * pitchVar;
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(100, freq * 0.6), now + 0.07);
+
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(baseVolume, now + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+        osc.connect(gainNode);
+        osc.start(now);
+        osc.stop(now + 0.085);
     }
 
     /**
