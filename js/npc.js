@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS } from './config.js';
 import { applyToonMaterial } from './world.js';
+import { audioEngine } from './audio-engine.js';
 
 const NPC_STATES = {
     IDLE: 'IDLE',
@@ -156,6 +157,10 @@ export function createNPC(position = new THREE.Vector3()) {
         // Visual feedback: flash white or different color
         body.material.color.setHex(0xaaaaaa);
 
+        // Play ARGH sound (pain/grunt)
+        const intensity = Math.min(1.0, state.ragdollImpactSpeed / 15);
+        audioEngine.playSynthSound('ARGH', group.position, 0.7 + intensity * 0.3);
+
         // Show satirical ragdoll text
         if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
             const ragdollText = SATIRICAL_TEXTS.RAGDOLL[
@@ -264,6 +269,9 @@ export function createNPC(position = new THREE.Vector3()) {
         body.material.color.setHex(0x555555);
         head.material.color.setHex(0x555555);
         indicator.visible = false;
+
+        // Play ARGH sound (death scream - maximum intensity)
+        audioEngine.playSynthSound('ARGH', group.position, 1.0);
 
         // Show satirical death text
         if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {

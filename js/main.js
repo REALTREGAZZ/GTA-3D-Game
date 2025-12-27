@@ -28,6 +28,7 @@ import { createCombatSystem } from './combat-system.js';
 import { createReplaySystem } from './replay-system.js';
 import { createNPCSystem } from './npc-system.js';
 import { createChaosCamera } from './chaos-camera.js';
+import { audioEngine } from './audio-engine.js';
 
 // ============================================
 // GAME STATE
@@ -506,6 +507,9 @@ function initThreeWorld() {
         UI.hud.weaponName.style.color = '#ffcc00';
     }
 
+    // Initialize Audio Engine
+    audioEngine.init();
+
     console.log('--- World Initialization Debug ---');
     console.log('World3D:', World3D);
     console.log('Terrain created:', Terrain?.mesh);
@@ -626,6 +630,11 @@ function update(dt, rawDt = dt) {
     // Update chaos camera (FOV kicks, tracking, kill cam)
     if (ChaosCamera) {
         ChaosCamera.update(rawDt, NPCSystem, World3D?.camera, PlayerCamera, GameState);
+    }
+
+    // Update audio engine listener position
+    if (audioEngine && World3D?.camera) {
+        audioEngine.updateListenerPosition(World3D.camera.position);
     }
 
     // Update sky + lighting based on time of day
@@ -1259,6 +1268,15 @@ async function init() {
     
     console.log('Juego inicializado correctamente');
 }
+
+// ============================================
+// CLEANUP ON PAGE UNLOAD
+// ============================================
+window.addEventListener('beforeunload', () => {
+    if (audioEngine) {
+        audioEngine.dispose();
+    }
+});
 
 // ============================================
 // START THE GAME

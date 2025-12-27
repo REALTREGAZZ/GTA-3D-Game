@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { GAME_CONFIG, COMBAT_CONFIG, AUDIO_CONFIG, TARGET_CONFIG, SATIRICAL_TEXTS } from './config.js';
+import { audioEngine } from './audio-engine.js';
 
 export function createCombatSystem(player, scene, camera, gameState, ui, options = {}) {
     const { npcSystem = null, playerProxy = null } = options;
@@ -174,8 +175,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         impactPoint.y += 1.0;
         createImpactParticles(impactPoint, 'MELEE');
         
-        // Play sound effect
-        playSound('KNOCKBACK_AIR');
+        // Play BONK sound with dynamic intensity
+        const intensity = Math.min(1.5, force / 25); // Normalize force to intensity
+        audioEngine.playSynthSound('BONK', npc.mesh.position, intensity);
     }
 
     function initAudio() {
@@ -340,8 +342,8 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         // Set cooldown even if we miss (swing animation)
         state.meleeCooldown = GAME_CONFIG.COMBAT.MELEE_COOLDOWN;
 
-        // Play effects (always)
-        playSound('MELEE_IMPACT');
+        // Play WHOOSH sound (punch swing)
+        audioEngine.playSynthSound('WHOOSH', playerPos, 0.8);
 
         // Player recoil animation
         if (player?.state) {
@@ -743,7 +745,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                     // Apply knockback and ragdoll
                     applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce);
 
-                    playSound('RANGED_IMPACT');
+                    // Play CRASH sound for bullet impact
+                    const impactIntensity = Math.min(1.2, bullet.damage / 10);
+                    audioEngine.playSynthSound('CRASH', bullet.mesh.position, impactIntensity);
                     createImpactParticles(bullet.mesh.position.clone(), 'RANGED');
                     createDamageNumber(bullet.mesh.position.clone(), bullet.damage, 'RANGED');
 
