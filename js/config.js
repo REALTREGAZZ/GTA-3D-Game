@@ -807,6 +807,17 @@ const SATIRICAL_TEXTS = {
 export const COMBAT_CONFIG = GAME_CONFIG.COMBAT;
 
 // ============================================
+// WAVE SYSTEM CONFIG
+// ============================================
+export const WAVE_SYSTEM_CONFIG = {
+    INITIAL_WAVE: 1,
+    MAX_WAVES: 10,
+    INITIAL_NPC_COUNT: 5,
+    SPAWN_RADIUS: 30,
+    WAVE_SPAWN_DELAY: 10.0,
+};
+
+// ============================================
 // DOPAMINE ENGINE CONFIG (Chaos Score + Waves + VFX)
 // ============================================
 export const DOPAMINE_CONFIG = {

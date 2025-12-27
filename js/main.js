@@ -9,6 +9,7 @@ import {
     GAME_CONFIG,
     DEBUG_CONFIG,
     GRAPHICS_PRESETS,
+    WAVE_SYSTEM_CONFIG,
     getActivePreset,
     saveGraphicsPreset,
     getPresetName,
@@ -555,7 +556,7 @@ function initThreeWorld() {
     });
 
     // Now spawn initial NPCs after everything is initialized
-    NPCSystem.spawn(null, initialNPCCount);
+    NPCSystem.spawn(null, WAVE_SYSTEM_CONFIG.INITIAL_NPC_COUNT);
 
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
 
