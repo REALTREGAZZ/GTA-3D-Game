@@ -9,6 +9,7 @@ import { JUICE_SPRINT_CONFIG } from './config.js';
 export function createDustEmitterSystem(scene, maxDust = 50) {
     const dustParticles = [];
     const config = JUICE_SPRINT_CONFIG.DUST_EMITTER;
+    let activeDustCount = 0;
 
     function createDustParticle(position) {
         const geo = new THREE.SphereGeometry(0.05, 3, 3);
@@ -27,7 +28,15 @@ export function createDustEmitterSystem(scene, maxDust = 50) {
         mesh.userData.lifetime = config.LIFETIME;
         mesh.userData.maxLifetime = config.LIFETIME;
         scene.add(mesh);
+        activeDustCount++;
         return mesh;
+    }
+
+    function disposeDust(dust) {
+        scene.remove(dust);
+        if (dust.geometry) dust.geometry.dispose();
+        if (dust.material) dust.material.dispose();
+        activeDustCount--;
     }
 
     return {
@@ -42,9 +51,7 @@ export function createDustEmitterSystem(scene, maxDust = 50) {
                 );
                 if (dustParticles.length >= config.MAX_PARTICLES) {
                     const old = dustParticles.shift();
-                    scene.remove(old);
-                    old.geometry.dispose();
-                    old.material.dispose();
+                    disposeDust(old);
                 }
                 const particle = createDustParticle(position.clone().add(offset));
                 dustParticles.push(particle);
@@ -65,21 +72,36 @@ export function createDustEmitterSystem(scene, maxDust = 50) {
                 dust.material.opacity = 0.6 * progress;
 
                 if (progress <= 0) {
-                    scene.remove(dust);
-                    dust.geometry.dispose();
-                    dust.material.dispose();
+                    disposeDust(dust);
                     dustParticles.splice(i, 1);
                 }
             }
+
+            // Debug logging for pool size (throttled)
+            if (Math.random() < 0.01) {
+                console.log(`Dust pool size: ${activeDustCount} / ${config.MAX_PARTICLES}`);
+            }
+        },
+
+        getActiveCount() {
+            return activeDustCount;
+        },
+
+        setMaxParticles(count) {
+            // Dynamic scaling: adjust max particles
+            config.MAX_PARTICLES = count;
+        },
+
+        clear() {
+            while (dustParticles.length > 0) {
+                const dust = dustParticles.pop();
+                disposeDust(dust);
+            }
+            console.log('DustEmitterSystem.clear() - All dust particles disposed');
         },
 
         dispose() {
-            for (let i = 0; i < dustParticles.length; i++) {
-                scene.remove(dustParticles[i]);
-                dustParticles[i].geometry.dispose();
-                dustParticles[i].material.dispose();
-            }
-            dustParticles.length = 0;
+            this.clear();
         }
     };
 }

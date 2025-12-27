@@ -240,21 +240,36 @@ export function createAbilitySystem(player, scene, camera, gameState, options = 
             toNPC.y = 0; // Keep horizontal
             const direction = toNPC.normalize();
 
+            // Dizzy State: 2x damage multiplier for Dizzy NPCs
+            let damageMultiplier = 1.0;
+            if (npc.state && npc.state.isDizzy) {
+                damageMultiplier = 2.0;
+                console.log(`Gravity Blast: 2x damage on Dizzy NPC!`);
+            }
+
             // Calculate impulse vector
             const impulseVector = new THREE.Vector3();
-            impulseVector.x = direction.x * config.STRENGTH;
-            impulseVector.y = config.UPWARD_FORCE;
-            impulseVector.z = direction.z * config.STRENGTH;
+            impulseVector.x = direction.x * config.STRENGTH * damageMultiplier;
+            impulseVector.y = config.UPWARD_FORCE * damageMultiplier;
+            impulseVector.z = direction.z * config.STRENGTH * damageMultiplier;
 
             // Apply to NPC velocity
             if (npc.state.velocity) {
                 npc.state.velocity.copy(impulseVector);
             }
 
+            // Apply extra damage to Dizzy NPCs
+            if (damageMultiplier > 1.0 && npc.takeDamage) {
+                const bonusDamage = 30 * (damageMultiplier - 1.0); // 30 bonus damage for 2x
+                npc.takeDamage(bonusDamage, null, config.STRENGTH * damageMultiplier);
+            }
+
             // Enter ragdoll (real airtime) + then freeze horizontal briefly (anticipation)
             if (npc.enterRagdoll) {
                 const ragdollDuration = (GAME_CONFIG.COMBAT.RAGDOLL_DURATION || 2.0) + config.SUSPENSION_TIME;
-                npc.enterRagdoll(ragdollDuration, { playSound: false, showOverlay: false });
+                // Longer ragdoll for Dizzy NPCs
+                const finalRagdollDuration = damageMultiplier > 1.0 ? ragdollDuration * 1.5 : ragdollDuration;
+                npc.enterRagdoll(finalRagdollDuration, { playSound: false, showOverlay: false });
             }
 
             if (npc.enterSuspension) {
