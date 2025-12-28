@@ -72,6 +72,15 @@ export class PerformanceManagerElite {
         this.bloomPass = null;
         this.sunLight = null;
 
+        // Boss culling (optional)
+        this.camera = null;
+        this.bosses = [];
+        this.bossCullRadius = options.bossCullRadius ?? 100;
+        this._frustum = new THREE.Frustum();
+        this._projScreenMatrix = new THREE.Matrix4();
+        this._sphere = new THREE.Sphere();
+        this._tmpWorldPos = new THREE.Vector3();
+
         // Stats
         this.lastStatsUpdate = 0;
         this.statsUpdateInterval = 1.0; // seconds
@@ -106,6 +115,23 @@ export class PerformanceManagerElite {
     }
 
     /**
+     * Set camera reference for optional frustum culling.
+     */
+    setCamera(camera) {
+        this.camera = camera;
+    }
+
+    /**
+     * Provide boss entities (or their models) for culling.
+     */
+    setBosses(bosses = [], options = {}) {
+        this.bosses = Array.isArray(bosses) ? bosses : [];
+        if (typeof options.radius === 'number') {
+            this.bossCullRadius = options.radius;
+        }
+    }
+
+    /**
      * Update performance manager
      */
     update(deltaTime) {
@@ -131,6 +157,28 @@ export class PerformanceManagerElite {
         if (currentTime - this.lastStatsUpdate >= this.statsUpdateInterval) {
             this.updateStats();
             this.lastStatsUpdate = currentTime;
+        }
+
+        // Optional boss frustum culling
+        this.updateBossCulling();
+    }
+
+    updateBossCulling() {
+        if (!this.camera || !this.bosses || this.bosses.length === 0) return;
+
+        this.camera.updateMatrixWorld(true);
+        this._projScreenMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+        this._frustum.setFromProjectionMatrix(this._projScreenMatrix);
+
+        for (const boss of this.bosses) {
+            const model = boss?.model || boss;
+            if (!model) continue;
+
+            model.getWorldPosition(this._tmpWorldPos);
+            this._sphere.center.copy(this._tmpWorldPos);
+            this._sphere.radius = this.bossCullRadius;
+
+            model.visible = this._frustum.intersectsSphere(this._sphere);
         }
     }
 
