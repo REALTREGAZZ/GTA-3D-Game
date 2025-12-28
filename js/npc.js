@@ -4,10 +4,10 @@
  */
 
 import * as THREE from 'three';
-import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS, DOPAMINE_CONFIG, JUICE_SPRINT_CONFIG } from './config.js';
-import { applyToonMaterial } from './world.js';
+import { GAME_CONFIG, SATIRICAL_TEXTS, DOPAMINE_CONFIG, JUICE_SPRINT_CONFIG } from './config.js';
 import { audioEngine } from './audio-engine.js';
-import { createLowPolyHumanoid, createEmotionSystem, getRandomColorPreset, EMOTIONS } from './lowpoly-characters.js';
+import { getRandomColorPreset, EMOTIONS } from './lowpoly-characters.js';
+import { createNPCVisual } from './npc-visual.js';
 
 const NPC_STATES = {
     IDLE: 'IDLE',
@@ -17,8 +17,6 @@ const NPC_STATES = {
     FLEE: 'FLEE',
     DEAD: 'DEAD',
 };
-
-const ZERO_VEC = new THREE.Vector3();
 
 function randRange(min, max) {
     return min + Math.random() * (max - min);
@@ -30,50 +28,40 @@ function pickRandomXZDirection() {
 }
 
 export function createNPC(position = new THREE.Vector3()) {
-    // Create low-poly humanoid mesh with random colors
     const colorPreset = getRandomColorPreset();
-    const humanoid = createLowPolyHumanoid(colorPreset, false);
-    const group = humanoid.group;
+
+    // Rigged NPC visual (procedural skeletal by default, with optional GLB upgrade)
+    const visual = createNPCVisual({ colorPreset });
+    const group = visual.group;
     group.name = 'NPC';
 
-    // Get references to body parts
-    const head = humanoid.head;
-    const torso = humanoid.torso;
-    const body = torso; // Alias for compatibility
-    const face = humanoid.face;
-    const leftArm = humanoid.leftArm;
-    const rightArm = humanoid.rightArm;
-    const leftLeg = humanoid.leftLeg;
-    const rightLeg = humanoid.rightLeg;
-    const materials = humanoid.materials;
+    const indicator = visual.indicator;
 
-    // Create emotion system
-    const emotionSystem = createEmotionSystem(face);
+    // Legacy API fields (kept for backwards compatibility)
+    const body = null;
+    const head = null;
+    const face = null;
 
-    // HEAVY variant visual (larger, darker low-poly humanoid)
-    const heavyGroup = new THREE.Group();
-    heavyGroup.visible = false;
-    heavyGroup.scale.setScalar(1.5);
-
-    // Heavy uses same structure but darker materials
-    const heavyColorPreset = {
-        torso: 0x333333,
-        arms: 0x333333,
-        legs: 0x222222,
+    // Lightweight emotion state (visuals are handled via tinting)
+    const emotionSystem = {
+        state: {
+            currentEmotion: EMOTIONS.NEUTRAL,
+            emotionDuration: 0,
+        },
+        setEmotion(emotion, duration = 2000) {
+            this.state.currentEmotion = emotion;
+            this.state.emotionDuration = duration;
+        },
+        update(deltaMs) {
+            if (this.state.emotionDuration > 0) {
+                this.state.emotionDuration -= deltaMs;
+                if (this.state.emotionDuration <= 0 && this.state.currentEmotion !== EMOTIONS.NEUTRAL) {
+                    this.state.currentEmotion = EMOTIONS.NEUTRAL;
+                    this.state.emotionDuration = 0;
+                }
+            }
+        },
     };
-    const heavyHumanoid = createLowPolyHumanoid(heavyColorPreset, false);
-    const heavyMesh = heavyHumanoid.group;
-    heavyGroup.add(heavyMesh);
-    group.add(heavyGroup);
-
-    // Direction indicator (for attack animations)
-    const indicatorGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.35);
-    const indicatorMaterial = new THREE.MeshToonMaterial({
-        color: 0x222222,
-    });
-    const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
-    indicator.position.set(0, 1.1, 0.5);
-    group.add(indicator);
 
     group.position.copy(position);
 
@@ -97,7 +85,10 @@ export function createNPC(position = new THREE.Vector3()) {
         despawnTimer: 0,
         ragdollSpin: randRange(-1, 1),
         ragdollTilt: new THREE.Vector3(randRange(-1, 1), 0, randRange(-1, 1)).normalize(),
-        baseColor: materials.body.color.clone(),
+        baseColor: new THREE.Color(colorPreset.torso),
+
+        // Animation (skeletal)
+        attackAnimTimer: 0,
 
         // Furia System (Venganza Física)
         lastAttacker: null,      // Quién me golpeó por última vez
@@ -151,46 +142,21 @@ export function createNPC(position = new THREE.Vector3()) {
     const BASIC_MAX_HEALTH = 60;
     const HEAVY_MAX_HEALTH = 150;
 
-    function getVisualMeshes() {
-        return state.type === 'HEAVY' ? [heavyMesh] : [torso, head];
-    }
-
     function setVisualColor(color) {
-        if (state.type === 'HEAVY') {
-            heavyHumanoid.materials.body.color.copy(color);
-            heavyHumanoid.materials.arm.color.copy(color);
-            heavyHumanoid.materials.leg.color.copy(color);
-        } else {
-            materials.body.color.copy(color);
-            materials.arm.color.copy(color);
-        }
+        visual.setTint(color);
     }
 
     function applyType(type = 'BASIC') {
         state.type = type === 'HEAVY' ? 'HEAVY' : 'BASIC';
 
         const isHeavy = state.type === 'HEAVY';
-        torso.visible = !isHeavy;
-        head.visible = !isHeavy;
-        leftArm.visible = !isHeavy;
-        rightArm.visible = !isHeavy;
-        leftLeg.visible = !isHeavy;
-        rightLeg.visible = !isHeavy;
-        face.visible = !isHeavy;
-        indicator.visible = !isHeavy;
-        heavyGroup.visible = isHeavy;
 
-        if (isHeavy) {
-            group.scale.setScalar(1.5);
-            state.maxHealth = HEAVY_MAX_HEALTH;
-            state.baseColor.copy(new THREE.Color(0x333333));
-            setVisualColor(state.baseColor);
-        } else {
-            group.scale.setScalar(1.0);
-            state.maxHealth = BASIC_MAX_HEALTH;
-            state.baseColor.copy(new THREE.Color(colorPreset.torso));
-            setVisualColor(state.baseColor);
-        }
+        // Heavy NPCs are bigger + darker
+        visual.setBaseScale(isHeavy ? 1.5 : 1.0);
+
+        state.maxHealth = isHeavy ? HEAVY_MAX_HEALTH : BASIC_MAX_HEALTH;
+        state.baseColor.copy(new THREE.Color(isHeavy ? 0x333333 : colorPreset.torso));
+        setVisualColor(state.baseColor);
 
         state.health = state.maxHealth;
     }
@@ -268,8 +234,8 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastImpactTime = 0;
 
         // Reset mesh scales
-        torso.scale.set(1, 1, 1);
-        head.scale.set(1, 1, 1);
+        visual.setSquashScale(1, 1);
+        state.attackAnimTimer = 0;
 
         indicator.visible = true;
         setVisualColor(state.baseColor);
@@ -292,21 +258,18 @@ export function createNPC(position = new THREE.Vector3()) {
         state.currentEmotion = emotion;
         state.emotionDuration = duration;
 
-        // Visual feedback for different emotions
+        // Visual feedback for different emotions (rigged characters: tinting)
         if (emotion === EMOTIONS.PANIC) {
-            // Flash orange briefly on panic
-            materials.body.color.setHex(0xffaa00);
+            setVisualColor(new THREE.Color(0xffaa00));
             setTimeout(() => {
-                if (state.active) {
-                    materials.body.color.setHex(state.baseColor.getHex());
+                if (state.active && state.currentEmotion === EMOTIONS.PANIC) {
+                    setVisualColor(state.baseColor);
                 }
             }, 200);
         } else if (emotion === EMOTIONS.KNOCKED_OUT) {
-            // Gray out on knocked out
-            materials.body.color.setHex(0x666666);
+            setVisualColor(new THREE.Color(0x666666));
         } else if (emotion === EMOTIONS.NEUTRAL) {
-            // Restore normal color
-            materials.body.color.copy(state.baseColor);
+            setVisualColor(state.baseColor);
         }
     }
 
@@ -399,6 +362,9 @@ export function createNPC(position = new THREE.Vector3()) {
         // Restore color and emotion
         setVisualColor(state.baseColor);
         setEmotion(EMOTIONS.NEUTRAL, 0);
+
+        visual.setSquashScale(1, 1);
+        visual.playAnimation('idle', { fade: 0.2 });
     }
 
     function enterSuspension(duration) {
@@ -457,9 +423,8 @@ export function createNPC(position = new THREE.Vector3()) {
 
         // Immediate knockback easing (visual validation)
         if (impulse > 0 && typeof impulse === 'number') {
-            // Apply scale squash on impact direction
             const squashIntensity = Math.min(0.3, impulse / 50.0);
-            body.scale.set(1 - squashIntensity, 1 + squashIntensity, 1 - squashIntensity);
+            visual.setSquashScale(1 - squashIntensity, 1 + squashIntensity);
             state.squashTimer = 0.2; // Recover squash over 0.2s
         }
 
@@ -526,6 +491,10 @@ export function createNPC(position = new THREE.Vector3()) {
                 indicator.material.color.setHex(0x222222);
             }
         }, 100);
+
+        // Skeletal one-shot (procedural / external models)
+        state.attackAnimTimer = 0.35;
+        visual.playAnimation('attack', { once: true, fade: 0.08 });
 
         if (typeof target.takeDamage === 'function') {
             if (target.mesh) {
@@ -598,6 +567,9 @@ export function createNPC(position = new THREE.Vector3()) {
         // Update emotion system
         updateEmotions(dt * 1000); // Convert to milliseconds
 
+        // Animation timers
+        state.attackAnimTimer = Math.max(0, state.attackAnimTimer - dt);
+
         // Furia System: Update furia timer
         if (state.furia > 0) {
             state.furia -= dt;
@@ -607,6 +579,9 @@ export function createNPC(position = new THREE.Vector3()) {
         if (state.isRagdoll) {
             if (state.justEnteredRagdoll) {
                 state.justEnteredRagdoll = false;
+
+                // Skeletal fall pose while the ragdoll-lite physics flies
+                visual.playAnimation('fall', { once: true, fade: 0.12 });
 
                 const impact = Math.min(1.0, state.ragdollImpactSpeed / 20.0);
                 feedback?.applyHitstop?.(0.4 + 0.4 * impact);
@@ -735,6 +710,9 @@ export function createNPC(position = new THREE.Vector3()) {
                 group.rotation.x *= 0.9;
             }
             
+            // Keep skeletal pose ticking (even if clamped)
+            visual.update(dt);
+
             // Check if ragdoll time is over
             if (state.ragdollTimer <= 0) {
                 exitRagdoll();
@@ -823,27 +801,13 @@ export function createNPC(position = new THREE.Vector3()) {
         if (state.squashTimer > 0) {
             state.squashTimer -= dt;
 
-            // Smooth recovery from squashed to normal scale
             const recoveryProgress = 1.0 - (state.squashTimer / 0.2);
             const scaleXZ = (1.0 - 0.3) + (0.3 * recoveryProgress);
             const scaleY = (1.0 + 0.3) - (0.3 * recoveryProgress);
 
-            if (state.type === 'HEAVY') {
-                heavyHumanoid.torso.scale.set(scaleXZ, scaleY, scaleXZ);
-                heavyHumanoid.head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
-            } else {
-                torso.scale.set(scaleXZ, scaleY, scaleXZ);
-                head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
-            }
+            visual.setSquashScale(scaleXZ, scaleY);
         } else {
-            // Ensure normal scale
-            if (state.type === 'HEAVY') {
-                heavyHumanoid.torso.scale.set(1, 1, 1);
-                heavyHumanoid.head.scale.set(1, 1, 1);
-            } else {
-                torso.scale.set(1, 1, 1);
-                head.scale.set(1, 1, 1);
-            }
+            visual.setSquashScale(1, 1);
         }
 
         if (state.state === NPC_STATES.DEAD) {
@@ -855,6 +819,9 @@ export function createNPC(position = new THREE.Vector3()) {
             group.rotation.x = state.ragdollTilt.x * t * Math.PI * 0.5;
             group.rotation.z = state.ragdollTilt.z * t * Math.PI * 0.5;
             group.rotation.y += state.ragdollSpin * dt * 2.5;
+
+            visual.playAnimation('fall', { once: true, fade: 0.12 });
+            visual.update(dt);
 
             if (state.despawnTimer <= 0) {
                 setActive(false);
@@ -1057,55 +1024,24 @@ export function createNPC(position = new THREE.Vector3()) {
             group.position.y = groundY + 1.0;
         }
 
-        // Gentle separation to avoid stacking
-        for (let i = 0; i < allNPCs.length; i++) {
-            const other = allNPCs[i];
-            if (!other || other === api || !other.state?.active || other.state?.state === NPC_STATES.DEAD) continue;
-            const delta = group.position.clone().sub(other.mesh.position);
-            delta.y = 0;
-            const d = delta.length();
-            if (d > 0.001 && d < 0.9) {
-                const threshold = GAME_CONFIG.COMBAT.COLLISION_SHAKE_THRESHOLD || 15.0;
-                const otherVel = other.state?.velocity || ZERO_VEC;
-                const relSpeed = state.velocity.clone().sub(otherVel).length();
+        // Skeletal animation state
+        let anim = 'idle';
+        const speed = Math.sqrt(state.velocity.x ** 2 + state.velocity.z ** 2);
 
-                if (
-                   feedback?.applyHitstop &&
-                   feedback?.applyScreenShake &&
-                   state.collisionShakeCooldown <= 0 &&
-                   relSpeed > threshold &&
-                   state.id < (other.state?.id || '')
-                ) {
-                   const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
-
-                   feedback.applyHitstop(0.5 + 0.5 * impact);
-                   feedback.applyScreenShake(0.3 + 0.7 * impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION * 0.75);
-
-                   state.collisionShakeCooldown = 0.25;
-                   if (other.state) other.state.collisionShakeCooldown = 0.25;
-                }
-
-                // Furia System: Ragdoll collision damage
-                if (state.isRagdoll) {
-                   const RAGDOLL_COLLISION_DAMAGE = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_COLLISION_DAMAGE || 5;
-                   other.takeDamage(RAGDOLL_COLLISION_DAMAGE, api, relSpeed);
-
-                   // Knockback al otro
-                   const dir = delta.clone().normalize();
-                   other.state.velocity.add(dir.multiplyScalar(15.0));
-
-                   // Show satirical NPC chain overlay
-                   if (typeof SATIRICAL_TEXTS !== 'undefined' && typeof OverlaySystem !== 'undefined') {
-                       const chainText = SATIRICAL_TEXTS.NPC_CHAIN[
-                           Math.floor(Math.random() * SATIRICAL_TEXTS.NPC_CHAIN.length)
-                       ];
-                       OverlaySystem.show(chainText, 2.0);
-                   }
-                }
-
-                group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));
-            }
+        if (state.isSuspended) {
+            anim = 'fall';
+        } else if (state.attackAnimTimer > 0) {
+            anim = 'attack';
+        } else if (speed < 0.2) {
+            anim = 'idle';
+        } else if (state.isPanic || state.state === NPC_STATES.FLEE || speed > 6.0) {
+            anim = 'run';
+        } else {
+            anim = 'walk';
         }
+
+        visual.playAnimation(anim);
+        visual.update(dt);
     }
 
     const api = {

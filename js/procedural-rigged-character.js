@@ -66,7 +66,7 @@ export function createProceduralRiggedCharacter(colorPreset = null) {
 
     // Create bone map for easy access
     const boneMap = {};
-    bones.forEach(bone => {
+    bones.forEach((bone) => {
         boneMap[bone.name] = bone;
     });
 
@@ -74,14 +74,14 @@ export function createProceduralRiggedCharacter(colorPreset = null) {
     const animations = generateProceduralAnimations(bones);
 
     return {
-        scene: scene,
-        skinnedMesh: skinnedMesh,
-        skeleton: skeleton,
-        bones: bones,
-        boneMap: boneMap,
-        animations: animations,
+        scene,
+        skinnedMesh,
+        skeleton,
+        bones,
+        boneMap,
+        animations,
         originalMaterial: materials[0],
-        colorPreset: colorPreset,
+        colorPreset,
     };
 }
 
@@ -130,7 +130,7 @@ function createSkeletonBones() {
     neck.add(head);
     bones.push(head);
 
-    // Left Arm
+    // Left Arm (positive X)
     const leftShoulder = new THREE.Bone();
     leftShoulder.name = 'LeftShoulder';
     leftShoulder.position.set(0.15, 0.1, 0);
@@ -155,7 +155,7 @@ function createSkeletonBones() {
     leftForeArm.add(leftHand);
     bones.push(leftHand);
 
-    // Right Arm
+    // Right Arm (negative X)
     const rightShoulder = new THREE.Bone();
     rightShoulder.name = 'RightShoulder';
     rightShoulder.position.set(-0.15, 0.1, 0);
@@ -180,7 +180,7 @@ function createSkeletonBones() {
     rightForeArm.add(rightHand);
     bones.push(rightHand);
 
-    // Left Leg
+    // Left Leg (positive X)
     const leftUpLeg = new THREE.Bone();
     leftUpLeg.name = 'LeftUpLeg';
     leftUpLeg.position.set(0.1, -0.05, 0);
@@ -199,7 +199,7 @@ function createSkeletonBones() {
     leftLeg.add(leftFoot);
     bones.push(leftFoot);
 
-    // Right Leg
+    // Right Leg (negative X)
     const rightUpLeg = new THREE.Bone();
     rightUpLeg.name = 'RightUpLeg';
     rightUpLeg.position.set(-0.1, -0.05, 0);
@@ -225,61 +225,63 @@ function createSkeletonBones() {
 // GEOMETRY CREATION WITH SKINNING
 // ============================================
 
+function toNonIndexed(geom) {
+    return geom.index ? geom.toNonIndexed() : geom;
+}
+
 function createHumanoidGeometry() {
-    // Create separate geometries for each body part with material groups
     const geometries = [];
 
-    // Head geometry (box)
-    const headGeom = new THREE.BoxGeometry(0.3, 0.35, 0.28);
+    // Head (sphere)
+    const headGeom = toNonIndexed(new THREE.SphereGeometry(0.18, 14, 10));
     headGeom.translate(0, 0.9, 0);
     geometries.push({ geometry: headGeom, materialIndex: 0 });
 
-    // Torso geometry (tall box)
-    const torsoGeom = new THREE.BoxGeometry(0.45, 0.5, 0.3);
+    // Torso (tapered cylinder)
+    const torsoGeom = toNonIndexed(new THREE.CylinderGeometry(0.22, 0.28, 0.55, 12, 6));
     torsoGeom.translate(0, 0.55, 0);
     geometries.push({ geometry: torsoGeom, materialIndex: 1 });
 
     // Left upper arm
-    const leftUpperArmGeom = new THREE.BoxGeometry(0.12, 0.35, 0.12);
-    leftUpperArmGeom.translate(-0.35, 0.65, 0);
+    const leftUpperArmGeom = toNonIndexed(new THREE.CapsuleGeometry(0.055, 0.22, 6, 10));
+    leftUpperArmGeom.translate(0.34, 0.65, 0);
     geometries.push({ geometry: leftUpperArmGeom, materialIndex: 2 });
 
     // Left lower arm
-    const leftLowerArmGeom = new THREE.BoxGeometry(0.1, 0.35, 0.1);
-    leftLowerArmGeom.translate(-0.38, 0.3, 0);
+    const leftLowerArmGeom = toNonIndexed(new THREE.CapsuleGeometry(0.05, 0.22, 6, 10));
+    leftLowerArmGeom.translate(0.38, 0.3, 0);
     geometries.push({ geometry: leftLowerArmGeom, materialIndex: 3 });
 
     // Right upper arm
-    const rightUpperArmGeom = new THREE.BoxGeometry(0.12, 0.35, 0.12);
-    rightUpperArmGeom.translate(0.35, 0.65, 0);
+    const rightUpperArmGeom = toNonIndexed(new THREE.CapsuleGeometry(0.055, 0.22, 6, 10));
+    rightUpperArmGeom.translate(-0.34, 0.65, 0);
     geometries.push({ geometry: rightUpperArmGeom, materialIndex: 4 });
 
     // Right lower arm
-    const rightLowerArmGeom = new THREE.BoxGeometry(0.1, 0.35, 0.1);
-    rightLowerArmGeom.translate(0.38, 0.3, 0);
+    const rightLowerArmGeom = toNonIndexed(new THREE.CapsuleGeometry(0.05, 0.22, 6, 10));
+    rightLowerArmGeom.translate(-0.38, 0.3, 0);
     geometries.push({ geometry: rightLowerArmGeom, materialIndex: 5 });
 
     // Left thigh
-    const leftThighGeom = new THREE.BoxGeometry(0.16, 0.45, 0.16);
-    leftThighGeom.translate(-0.2, 0.1, 0);
+    const leftThighGeom = toNonIndexed(new THREE.CapsuleGeometry(0.075, 0.3, 6, 10));
+    leftThighGeom.translate(0.2, 0.1, 0);
     geometries.push({ geometry: leftThighGeom, materialIndex: 6 });
 
     // Left calf
-    const leftCalfGeom = new THREE.BoxGeometry(0.14, 0.45, 0.14);
-    leftCalfGeom.translate(-0.2, -0.35, 0);
+    const leftCalfGeom = toNonIndexed(new THREE.CapsuleGeometry(0.07, 0.3, 6, 10));
+    leftCalfGeom.translate(0.2, -0.35, 0);
     geometries.push({ geometry: leftCalfGeom, materialIndex: 7 });
 
     // Right thigh
-    const rightThighGeom = new THREE.BoxGeometry(0.16, 0.45, 0.16);
-    rightThighGeom.translate(0.2, 0.1, 0);
+    const rightThighGeom = toNonIndexed(new THREE.CapsuleGeometry(0.075, 0.3, 6, 10));
+    rightThighGeom.translate(-0.2, 0.1, 0);
     geometries.push({ geometry: rightThighGeom, materialIndex: 8 });
 
     // Right calf
-    const rightCalfGeom = new THREE.BoxGeometry(0.14, 0.45, 0.14);
-    rightCalfGeom.translate(0.2, -0.35, 0);
+    const rightCalfGeom = toNonIndexed(new THREE.CapsuleGeometry(0.07, 0.3, 6, 10));
+    rightCalfGeom.translate(-0.2, -0.35, 0);
     geometries.push({ geometry: rightCalfGeom, materialIndex: 9 });
 
-    // Merge all geometries with material groups
     const result = mergeGeometriesWithGroups(geometries);
 
     // Add skinning data
@@ -292,41 +294,55 @@ function createHumanoidGeometry() {
     for (let i = 0; i < position.count; i++) {
         vertex.fromBufferAttribute(position, i);
 
-        // Simple skinning based on Y position
         const y = vertex.y;
         const x = vertex.x;
+        const absX = Math.abs(x);
+
         let indices = [0, 0, 0, 0];
         let weights = [0, 0, 0, 0];
 
-        if (y > 0.75) {
+        // Arms: detect via X distance from body
+        if (y > 0.15 && y < 0.85 && absX > 0.22) {
+            const isLeft = x > 0;
+
+            if (y > 0.48) {
+                // Upper arm region
+                indices = isLeft ? [7, 6, 3, 0] : [11, 10, 3, 0];
+                weights = [0.75, 0.25, 0, 0];
+            } else {
+                // Forearm/hand region
+                indices = isLeft ? [8, 7, 6, 0] : [12, 11, 10, 0];
+                weights = [0.6, 0.3, 0.1, 0];
+            }
+        } else if (y > 0.75) {
             // Head region
-            indices = [5, 4, 0, 0]; // Head, Neck
-            weights = [0.7, 0.3, 0, 0];
+            indices = [5, 4, 3, 0];
+            weights = [0.75, 0.2, 0.05, 0];
         } else if (y > 0.35) {
             // Upper torso
-            indices = [3, 2, 0, 0]; // Spine2, Spine1
-            weights = [0.6, 0.4, 0, 0];
+            indices = [3, 2, 1, 0];
+            weights = [0.55, 0.25, 0.15, 0.05];
         } else if (y > 0) {
             // Lower torso
-            indices = [1, 0, 0, 0]; // Spine, Hips
+            indices = [1, 0, 0, 0];
             weights = [0.6, 0.4, 0, 0];
         } else if (y > -0.2) {
             // Upper legs
             if (x > 0) {
-                indices = [14, 0, 0, 0]; // LeftUpLeg, Hips
+                indices = [14, 0, 0, 0];
                 weights = [0.7, 0.3, 0, 0];
             } else {
-                indices = [17, 0, 0, 0]; // RightUpLeg, Hips
+                indices = [17, 0, 0, 0];
                 weights = [0.7, 0.3, 0, 0];
             }
         } else {
             // Lower legs/feet
             if (x > 0) {
-                indices = [15, 16, 0, 0]; // LeftLeg, LeftFoot
-                weights = [0.6, 0.4, 0, 0];
+                indices = [15, 16, 14, 0];
+                weights = [0.6, 0.25, 0.15, 0];
             } else {
-                indices = [18, 19, 0, 0]; // RightLeg, RightFoot
-                weights = [0.6, 0.4, 0, 0];
+                indices = [18, 19, 17, 0];
+                weights = [0.6, 0.25, 0.15, 0];
             }
         }
 
@@ -338,29 +354,6 @@ function createHumanoidGeometry() {
     result.geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
 
     return result.geometry;
-}
-
-// Helper function to merge geometries
-function mergeGeometries(geometries) {
-    const position = [];
-    const normal = [];
-
-    for (let i = 0; i < geometries.length; i++) {
-        const geom = geometries[i];
-        const posAttr = geom.attributes.position;
-        const normAttr = geom.attributes.normal;
-
-        for (let j = 0; j < posAttr.count; j++) {
-            position.push(posAttr.getX(j), posAttr.getY(j), posAttr.getZ(j));
-            normal.push(normAttr.getX(j), normAttr.getY(j), normAttr.getZ(j));
-        }
-    }
-
-    const mergedGeom = new THREE.BufferGeometry();
-    mergedGeom.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-    mergedGeom.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
-
-    return mergedGeom;
 }
 
 // Helper function to merge geometries with material groups
@@ -376,14 +369,12 @@ function mergeGeometriesWithGroups(geometryInfos) {
         const posAttr = geometry.attributes.position;
         const normAttr = geometry.attributes.normal;
 
-        // Track group start
         groups.push({
             start: vertexOffset,
             count: posAttr.count,
-            materialIndex: materialIndex
+            materialIndex,
         });
 
-        // Copy vertices and normals
         for (let j = 0; j < posAttr.count; j++) {
             position.push(posAttr.getX(j), posAttr.getY(j), posAttr.getZ(j));
             normal.push(normAttr.getX(j), normAttr.getY(j), normAttr.getZ(j));
@@ -396,7 +387,6 @@ function mergeGeometriesWithGroups(geometryInfos) {
     mergedGeom.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
     mergedGeom.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
 
-    // Add material groups
     for (const group of groups) {
         mergedGeom.addGroup(group.start, group.count, group.materialIndex);
     }
@@ -408,30 +398,40 @@ function mergeGeometriesWithGroups(geometryInfos) {
 // PROCEDURAL ANIMATION GENERATION
 // ============================================
 
+function quatFromX(angle) {
+    const q = new THREE.Quaternion();
+    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
+    return q;
+}
+
 function generateProceduralAnimations(bones) {
     const animations = [];
-
-    // Find bones
-    const hips = bones.find(b => b.name === 'Hips');
-    const leftUpLeg = bones.find(b => b.name === 'LeftUpLeg');
-    const rightUpLeg = bones.find(b => b.name === 'RightUpLeg');
-    const leftLeg = bones.find(b => b.name === 'LeftLeg');
-    const rightLeg = bones.find(b => b.name === 'RightLeg');
-    const leftArm = bones.find(b => b.name === 'LeftArm');
-    const rightArm = bones.find(b => b.name === 'RightArm');
-    const spine = bones.find(b => b.name === 'Spine');
 
     // IDLE Animation
     const idleTracks = [];
     const idleTimes = [0, 1, 2];
-    
+
     // Subtle breathing movement on hips
     const idleHipsY = [1.0, 1.02, 1.0];
-    idleTracks.push(new THREE.VectorKeyframeTrack(
-        'Hips.position',
-        idleTimes,
-        [0, idleHipsY[0], 0, 0, idleHipsY[1], 0, 0, idleHipsY[2], 0]
-    ));
+    idleTracks.push(
+        new THREE.VectorKeyframeTrack('Hips.position', idleTimes, [0, idleHipsY[0], 0, 0, idleHipsY[1], 0, 0, idleHipsY[2], 0])
+    );
+
+    // Subtle arm sway
+    idleTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftArm.quaternion',
+            idleTimes,
+            [quatFromX(0.05), quatFromX(-0.03), quatFromX(0.05)].flatMap((q) => [q.x, q.y, q.z, q.w])
+        )
+    );
+    idleTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightArm.quaternion',
+            idleTimes,
+            [quatFromX(-0.05), quatFromX(0.03), quatFromX(-0.05)].flatMap((q) => [q.x, q.y, q.z, q.w])
+        )
+    );
 
     const idleClip = new THREE.AnimationClip('idle', 2, idleTracks);
     animations.push({ name: 'idle', clip: idleClip });
@@ -442,35 +442,57 @@ function generateProceduralAnimations(bones) {
 
     // Hip bobbing
     const walkHipsY = [1.0, 0.98, 1.0, 0.98, 1.0];
-    walkTracks.push(new THREE.VectorKeyframeTrack(
-        'Hips.position',
-        walkTimes,
-        walkHipsY.flatMap(y => [0, y, 0])
-    ));
+    walkTracks.push(new THREE.VectorKeyframeTrack('Hips.position', walkTimes, walkHipsY.flatMap((y) => [0, y, 0])));
 
-    // Left leg swing
+    // Leg swing
     const walkLeftLegRot = [0, 0.5, 0, -0.5, 0];
-    walkTracks.push(new THREE.QuaternionKeyframeTrack(
-        'LeftUpLeg.quaternion',
-        walkTimes,
-        walkLeftLegRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    walkTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftUpLeg.quaternion',
+            walkTimes,
+            walkLeftLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
-    // Right leg swing (opposite)
     const walkRightLegRot = [0, -0.5, 0, 0.5, 0];
-    walkTracks.push(new THREE.QuaternionKeyframeTrack(
-        'RightUpLeg.quaternion',
-        walkTimes,
-        walkRightLegRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    walkTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightUpLeg.quaternion',
+            walkTimes,
+            walkRightLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    // Arm swing (opposite legs)
+    const walkLeftArmRot = [0, -0.35, 0, 0.35, 0];
+    walkTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftArm.quaternion',
+            walkTimes,
+            walkLeftArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const walkRightArmRot = [0, 0.35, 0, -0.35, 0];
+    walkTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightArm.quaternion',
+            walkTimes,
+            walkRightArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
     const walkClip = new THREE.AnimationClip('walk', 1.0, walkTracks);
     animations.push({ name: 'walk', clip: walkClip });
@@ -479,37 +501,56 @@ function generateProceduralAnimations(bones) {
     const runTracks = [];
     const runTimes = [0, 0.15, 0.3, 0.45, 0.6];
 
-    // Hip bobbing (more pronounced)
     const runHipsY = [1.0, 0.95, 1.0, 0.95, 1.0];
-    runTracks.push(new THREE.VectorKeyframeTrack(
-        'Hips.position',
-        runTimes,
-        runHipsY.flatMap(y => [0, y, 0])
-    ));
+    runTracks.push(new THREE.VectorKeyframeTrack('Hips.position', runTimes, runHipsY.flatMap((y) => [0, y, 0])));
 
-    // Left leg swing (exaggerated)
-    const runLeftLegRot = [0, 0.8, 0, -0.8, 0];
-    runTracks.push(new THREE.QuaternionKeyframeTrack(
-        'LeftUpLeg.quaternion',
-        runTimes,
-        runLeftLegRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    const runLeftLegRot = [0, 0.85, 0, -0.85, 0];
+    runTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftUpLeg.quaternion',
+            runTimes,
+            runLeftLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
-    // Right leg swing (opposite)
-    const runRightLegRot = [0, -0.8, 0, 0.8, 0];
-    runTracks.push(new THREE.QuaternionKeyframeTrack(
-        'RightUpLeg.quaternion',
-        runTimes,
-        runRightLegRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    const runRightLegRot = [0, -0.85, 0, 0.85, 0];
+    runTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightUpLeg.quaternion',
+            runTimes,
+            runRightLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const runLeftArmRot = [0, -0.65, 0, 0.65, 0];
+    runTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftArm.quaternion',
+            runTimes,
+            runLeftArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const runRightArmRot = [0, 0.65, 0, -0.65, 0];
+    runTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightArm.quaternion',
+            runTimes,
+            runRightArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
     const runClip = new THREE.AnimationClip('run', 0.6, runTracks);
     animations.push({ name: 'run', clip: runClip });
@@ -518,47 +559,95 @@ function generateProceduralAnimations(bones) {
     const jumpTracks = [];
     const jumpTimes = [0, 0.2, 0.4];
 
-    // Crouch then extend
     const jumpHipsY = [1.0, 0.8, 1.2];
-    jumpTracks.push(new THREE.VectorKeyframeTrack(
-        'Hips.position',
-        jumpTimes,
-        jumpHipsY.flatMap(y => [0, y, 0])
-    ));
+    jumpTracks.push(new THREE.VectorKeyframeTrack('Hips.position', jumpTimes, jumpHipsY.flatMap((y) => [0, y, 0])));
 
-    // Legs compress then extend
     const jumpLegRot = [0, 0.5, -0.3];
-    jumpTracks.push(new THREE.QuaternionKeyframeTrack(
-        'LeftUpLeg.quaternion',
-        jumpTimes,
-        jumpLegRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    jumpTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftUpLeg.quaternion',
+            jumpTimes,
+            jumpLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    jumpTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightUpLeg.quaternion',
+            jumpTimes,
+            jumpLegRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
     const jumpClip = new THREE.AnimationClip('jump', 0.4, jumpTracks);
     animations.push({ name: 'jump', clip: jumpClip });
 
-    // FALL Animation
+    // FALL Animation (arms up)
     const fallTracks = [];
-    const fallTimes = [0, 0.5];
+    const fallTimes = [0, 0.3];
 
-    // Arms up
-    const fallLeftArmRot = [0, -1.0];
-    fallTracks.push(new THREE.QuaternionKeyframeTrack(
-        'LeftArm.quaternion',
-        fallTimes,
-        fallLeftArmRot.flatMap(angle => {
-            const q = new THREE.Quaternion();
-            q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-            return [q.x, q.y, q.z, q.w];
-        })
-    ));
+    const fallArmRot = [0, -1.0];
+    fallTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftArm.quaternion',
+            fallTimes,
+            fallArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
 
-    const fallClip = new THREE.AnimationClip('fall', 0.5, fallTracks);
+    fallTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightArm.quaternion',
+            fallTimes,
+            fallArmRot.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const fallClip = new THREE.AnimationClip('fall', 0.3, fallTracks);
     animations.push({ name: 'fall', clip: fallClip });
+
+    // ATTACK Animation (quick punch)
+    const attackTracks = [];
+    const attackTimes = [0, 0.12, 0.24, 0.34];
+
+    const rightPunch = [0, -1.3, -0.4, 0];
+    attackTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'RightArm.quaternion',
+            attackTimes,
+            rightPunch.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const leftGuard = [0, 0.15, 0.1, 0];
+    attackTracks.push(
+        new THREE.QuaternionKeyframeTrack(
+            'LeftArm.quaternion',
+            attackTimes,
+            leftGuard.flatMap((angle) => {
+                const q = quatFromX(angle);
+                return [q.x, q.y, q.z, q.w];
+            })
+        )
+    );
+
+    const attackClip = new THREE.AnimationClip('attack', 0.34, attackTracks);
+    animations.push({ name: 'attack', clip: attackClip });
 
     return animations;
 }
@@ -573,16 +662,16 @@ function generateProceduralAnimations(bones) {
  */
 export function createProceduralCharacter(colorPreset = null) {
     const characterData = createProceduralRiggedCharacter(colorPreset);
-    
+
     // Convert animations array to map for AnimationStateMachine
     const animationMap = {};
-    characterData.animations.forEach(anim => {
+    characterData.animations.forEach((anim) => {
         animationMap[anim.name] = anim.clip;
     });
-    
+
     return {
         ...characterData,
-        animationMap: animationMap,
+        animationMap,
     };
 }
 

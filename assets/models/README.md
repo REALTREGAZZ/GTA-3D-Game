@@ -6,16 +6,22 @@ Place your Mixamo character models in this directory:
 
 ```
 /assets/models/
-  ├── Player_Aj.glb          # Player character model
-  ├── NPC_Ty.glb              # NPC variant 1
-  ├── NPC_Rufus.glb           # NPC variant 2
-  ├── NPC_Malcolm.glb         # NPC variant 3
-  └── animations/
-      ├── Idle.glb
-      ├── Walk.glb
-      ├── Run.glb
-      ├── Jump.glb
-      └── Fall.glb
+  ├── characters/
+  │   ├── Aj.glb              # NPC / player base model (example)
+  │   ├── Ty.glb
+  │   ├── Rufus.glb
+  │   ├── Xavier.glb
+  │   └── Aiden.glb
+  ├── animations/
+  │   ├── Idle.glb
+  │   ├── Walk.glb
+  │   ├── Run.glb
+  │   ├── Jump.glb
+  │   └── Fall.glb
+  ├── Player_Aj.glb           # (legacy path supported)
+  ├── NPC_Ty.glb              # (legacy path supported)
+  ├── NPC_Rufus.glb
+  └── NPC_Malcolm.glb
 ```
 
 ## 📥 How to Get Models
