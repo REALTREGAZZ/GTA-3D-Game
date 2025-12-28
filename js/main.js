@@ -374,6 +374,7 @@ let PerformanceMonitor = null;
 
 // World/Perf helpers
 let PerformanceManager = null;
+let PerformanceManagerEnhanced = null;
 let DarkSoulsWorld = null;
 let UISystem = null;
 let SaveSystem = null;
