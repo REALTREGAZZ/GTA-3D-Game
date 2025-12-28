@@ -7,6 +7,77 @@
 import * as THREE from 'three';
 
 // ============================================
+// FACIAL FEATURES SYSTEM
+// ============================================
+
+/**
+ * Create visible facial features (eyes and mouth) for a character
+ * Attaches to the head bone for automatic animation
+ */
+function createFacialFeatures(bones, colorPreset) {
+    const faceGroup = new THREE.Group();
+    
+    // Find the head bone
+    const headBone = bones.find(b => b.name === 'Head');
+    if (!headBone) {
+        console.warn('Head bone not found for facial features');
+        return { group: faceGroup };
+    }
+
+    // Eye whites (sclera)
+    const eyeWhiteGeometry = new THREE.SphereGeometry(0.055, 8, 8);
+    const eyeWhiteMaterial = new THREE.MeshToonMaterial({ 
+        color: 0xffffff,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.15,
+    });
+
+    const leftEye = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    leftEye.position.set(0.08, 0.95, 0.15);
+    leftEye.castShadow = false;
+    
+    const rightEye = new THREE.Mesh(eyeWhiteGeometry, eyeWhiteMaterial);
+    rightEye.position.set(-0.08, 0.95, 0.15);
+    rightEye.castShadow = false;
+
+    // Pupils
+    const pupilGeometry = new THREE.SphereGeometry(0.025, 6, 6);
+    const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+    const leftPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+    leftPupil.position.set(0.08, 0.95, 0.2);
+    leftPupil.castShadow = false;
+
+    const rightPupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+    rightPupil.position.set(-0.08, 0.95, 0.2);
+    rightPupil.castShadow = false;
+
+    // Mouth (simple line/box)
+    const mouthGeometry = new THREE.BoxGeometry(0.12, 0.02, 0.02);
+    const mouthMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    
+    const mouth = new THREE.Mesh(mouthGeometry, mouthMaterial);
+    mouth.position.set(0, 0.82, 0.16);
+    mouth.castShadow = false;
+
+    // Add all features to face group
+    faceGroup.add(leftEye);
+    faceGroup.add(rightEye);
+    faceGroup.add(leftPupil);
+    faceGroup.add(rightPupil);
+    faceGroup.add(mouth);
+
+    return {
+        group: faceGroup,
+        leftEye,
+        rightEye,
+        leftPupil,
+        rightPupil,
+        mouth,
+    };
+}
+
+// ============================================
 // SKELETAL HUMANOID GENERATOR
 // ============================================
 
@@ -63,6 +134,10 @@ export function createProceduralRiggedCharacter(colorPreset = null) {
     // Create scene container
     const scene = new THREE.Group();
     scene.add(skinnedMesh);
+
+    // Add facial features for visible personality
+    const face = createFacialFeatures(bones, colorPreset);
+    scene.add(face.group);
 
     // Create bone map for easy access
     const boneMap = {};

@@ -10,8 +10,8 @@ import * as THREE from 'three';
 function createSkyMaterial() {
     return new THREE.ShaderMaterial({
         uniforms: {
-            topColor: { value: new THREE.Color(0x78b7ff) },
-            bottomColor: { value: new THREE.Color(0xffffff) },
+            topColor: { value: new THREE.Color(0x0a0a1a) },
+            bottomColor: { value: new THREE.Color(0x1a1a3a) },
             offset: { value: 33 },
             exponent: { value: 0.6 },
         },
@@ -51,7 +51,7 @@ export function createSky({ scene, sunLight, ambientLight } = {}) {
 
     group.add(skyMesh);
 
-    const hemiLight = new THREE.HemisphereLight(0x9fd0ff, 0x2d2d2d, 0.45);
+    const hemiLight = new THREE.HemisphereLight(0x4a3a6a, 0x0a0a1a, 0.5);
     group.add(hemiLight);
 
     if (scene) {
@@ -71,11 +71,11 @@ export function createSky({ scene, sunLight, ambientLight } = {}) {
 
         const dayFactor = THREE.MathUtils.clamp((elevation + 0.15) / 1.15, 0, 1);
 
-        // Sky colors
-        const dayTop = new THREE.Color(0x78b7ff);
-        const dayBottom = new THREE.Color(0xeaf6ff);
-        const nightTop = new THREE.Color(0x06121f);
-        const nightBottom = new THREE.Color(0x0b1d33);
+        // Neon world sky colors - darker with purple/blue tints
+        const dayTop = new THREE.Color(0x2a1a4a);
+        const dayBottom = new THREE.Color(0x1a1a3a);
+        const nightTop = new THREE.Color(0x0a0a1a);
+        const nightBottom = new THREE.Color(0x0f0f20);
 
         skyMaterial.uniforms.topColor.value.copy(nightTop).lerp(dayTop, dayFactor);
         skyMaterial.uniforms.bottomColor.value.copy(nightBottom).lerp(dayBottom, dayFactor);
@@ -91,7 +91,7 @@ export function createSky({ scene, sunLight, ambientLight } = {}) {
             sunLight.target.position.set(0, 0, 0);
             sunLight.target.updateMatrixWorld(true);
 
-            const sunIntensity = THREE.MathUtils.clamp(dayFactor * 1.25, 0.02, 1.25);
+            const sunIntensity = THREE.MathUtils.clamp(dayFactor * 1.8, 0.5, 1.8);
             sunLight.intensity = sunIntensity;
 
             const warmSun = new THREE.Color(0xffd6a3);
@@ -100,14 +100,14 @@ export function createSky({ scene, sunLight, ambientLight } = {}) {
         }
 
         if (ambientLight) {
-            ambientLight.intensity = THREE.MathUtils.lerp(0.08, 0.38, dayFactor);
+            ambientLight.intensity = THREE.MathUtils.lerp(0.15, 0.35, dayFactor);
         }
 
-        hemiLight.intensity = THREE.MathUtils.lerp(0.12, 0.55, dayFactor);
+        hemiLight.intensity = THREE.MathUtils.lerp(0.2, 0.6, dayFactor);
 
         if (scene?.fog) {
-            const fogDay = new THREE.Color(0x87ceeb);
-            const fogNight = new THREE.Color(0x06121f);
+            const fogDay = new THREE.Color(0x1a1a3a);
+            const fogNight = new THREE.Color(0x0a0a1a);
             scene.fog.color.copy(fogNight).lerp(fogDay, dayFactor);
         }
     }

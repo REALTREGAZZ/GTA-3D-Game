@@ -44,6 +44,63 @@ function createBuildingTexture({
             const lit = Math.random() > 0.35;
             ctx.fillStyle = lit ? windowColor : '#2b2b2b';
             ctx.fillRect(x, y, windowW, windowH);
+            
+            // Add glow to lit windows
+            if (lit) {
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = windowColor;
+                ctx.fillStyle = windowColor;
+                ctx.fillRect(x, y, windowW, windowH);
+                ctx.shadowBlur = 0;
+            }
+        }
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 8;
+    return texture;
+}
+
+function createEmissiveWindowTexture({
+    width = 128,
+    height = 256,
+    windowColor = '#ffff00',
+} = {}) {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    
+    // Black background (no emission by default)
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, width, height);
+
+    const paddingX = 10;
+    const paddingY = 12;
+    const windowW = 10;
+    const windowH = 14;
+    const gapX = 10;
+    const gapY = 18;
+
+    // Only draw lit windows (for emissive map)
+    for (let y = paddingY; y < height - paddingY; y += gapY) {
+        for (let x = paddingX; x < width - paddingX; x += gapX) {
+            const lit = Math.random() > 0.35;
+            if (lit) {
+                ctx.fillStyle = windowColor;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = windowColor;
+                ctx.fillRect(x, y, windowW, windowH);
+                ctx.shadowBlur = 0;
+            }
         }
     }
 
@@ -102,10 +159,19 @@ export function createBuildings({
         texture.repeat.set(1, 1);
     }
     
-    const sharedMaterial = new THREE.MeshToonMaterial({
+    const emissiveTexture = createEmissiveWindowTexture();
+    if (emissiveTexture) {
+        emissiveTexture.repeat.set(1, 1);
+    }
+    
+    const sharedMaterial = new THREE.MeshStandardMaterial({
         color: GRAPHICS_PRESETS.FLAT_COLORS.BUILDING,
-        gradientMap: toonGradient,
         map: texture || null,
+        emissive: 0xffdd88,
+        emissiveMap: emissiveTexture || null,
+        emissiveIntensity: 1.2,
+        roughness: 0.8,
+        metalness: 0.1,
         side: THREE.DoubleSide,
     });
     

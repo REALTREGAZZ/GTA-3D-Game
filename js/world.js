@@ -55,10 +55,10 @@ export function applyToonMaterial(mesh, colorName, outlineScale = 1.08) {
 export function createWorld({ canvas, autoResize = true } = {}) {
     const scene = new THREE.Scene();
 
-    // Fog matches the flat sky color
-    const skyColor = GRAPHICS_PRESETS.FLAT_COLORS.SKY;
+    // Fog matches the neon world aesthetic - darker with slight blue tint
+    const fogColor = 0x0a0a1a;
     scene.fog = new THREE.Fog(
-        skyColor,
+        fogColor,
         GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_NEAR,
         GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_FAR,
     );
@@ -80,16 +80,17 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     });
 
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setClearColor(skyColor);
+    renderer.setClearColor(fogColor);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.NoToneMapping; // Flat shading works better without filmic tone mapping
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
     renderer.shadowMap.enabled = GRAPHICS_CONFIG.RENDERER.SHADOWS_ENABLED;
     renderer.shadowMap.type = THREE.PCFShadowMap; // Harder shadows look better with toon
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
     sunLight.position.set(50, 120, 30);
     sunLight.castShadow = true;
 
@@ -103,7 +104,9 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     sunLight.shadow.camera.right = d;
     sunLight.shadow.camera.top = d;
     sunLight.shadow.camera.bottom = -d;
-    sunLight.shadow.bias = -0.00015;
+    sunLight.shadow.bias = -0.0002;
+    sunLight.shadow.normalBias = 0.02;
+    sunLight.shadow.radius = 1;
 
     scene.add(sunLight);
     scene.add(sunLight.target);
