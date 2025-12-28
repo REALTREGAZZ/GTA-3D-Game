@@ -15,25 +15,46 @@ import * as THREE from 'three';
  * Compatible with the MixamoCharacter interface
  */
 export function createProceduralRiggedCharacter(colorPreset = null) {
-    // Default color if none provided
-    if (!colorPreset) {
-        const colors = [0xff4444, 0x4444ff, 0x44ff44, 0xffff44, 0xaa44ff, 0xff8844, 0x44ffff, 0xff44aa];
-        colorPreset = colors[Math.floor(Math.random() * colors.length)];
+    // Color presets with different clothing colors
+    const colorPresets = [
+        { torso: 0xff4444, arms: 0xff4444, legs: 0xcc3333 }, // Red gang
+        { torso: 0x4444ff, arms: 0x4444ff, legs: 0x3333cc }, // Blue gang
+        { torso: 0x44ff44, arms: 0x44ff44, legs: 0x2da22d }, // Green hoodie
+        { torso: 0xffff44, arms: 0xffff44, legs: 0xcccc33 }, // Yellow
+        { torso: 0xaa44ff, arms: 0xaa44ff, legs: 0x8833cc }, // Purple trench
+        { torso: 0xff8844, arms: 0xff8844, legs: 0xcc6633 }, // Orange jacket
+        { torso: 0x44ffff, arms: 0x44ffff, legs: 0x33cccc }, // Cyan vest
+        { torso: 0xff44aa, arms: 0xff44aa, legs: 0xcc3388 }, // Pink outfit
+    ];
+
+    // Use provided preset or random
+    if (!colorPreset || typeof colorPreset === 'number') {
+        colorPreset = colorPresets[Math.floor(Math.random() * colorPresets.length)];
     }
 
     // Create skeleton bones
     const bones = createSkeletonBones();
 
-    // Create skinned mesh
+    // Create skinned mesh with separate materials for different body parts
     const geometry = createHumanoidGeometry();
-    const material = new THREE.MeshToonMaterial({
-        color: colorPreset,
-        skinning: true,
-    });
 
-    const skinnedMesh = new THREE.SkinnedMesh(geometry, material);
+    // Create materials array for multi-material rendering
+    const materials = [
+        new THREE.MeshToonMaterial({ color: colorPreset.torso, skinning: true }), // 0: Head
+        new THREE.MeshToonMaterial({ color: colorPreset.torso, skinning: true }), // 1: Torso
+        new THREE.MeshToonMaterial({ color: colorPreset.arms, skinning: true }), // 2: Left upper arm
+        new THREE.MeshToonMaterial({ color: colorPreset.arms, skinning: true }), // 3: Left lower arm
+        new THREE.MeshToonMaterial({ color: colorPreset.arms, skinning: true }), // 4: Right upper arm
+        new THREE.MeshToonMaterial({ color: colorPreset.arms, skinning: true }), // 5: Right lower arm
+        new THREE.MeshToonMaterial({ color: colorPreset.legs, skinning: true }), // 6: Left thigh
+        new THREE.MeshToonMaterial({ color: colorPreset.legs, skinning: true }), // 7: Left calf
+        new THREE.MeshToonMaterial({ color: colorPreset.legs, skinning: true }), // 8: Right thigh
+        new THREE.MeshToonMaterial({ color: colorPreset.legs, skinning: true }), // 9: Right calf
+    ];
+
+    const skinnedMesh = new THREE.SkinnedMesh(geometry, materials);
     const skeleton = new THREE.Skeleton(bones);
-    
+
     skinnedMesh.add(bones[0]); // Add root bone
     skinnedMesh.bind(skeleton);
     skinnedMesh.castShadow = true;
@@ -59,7 +80,8 @@ export function createProceduralRiggedCharacter(colorPreset = null) {
         bones: bones,
         boneMap: boneMap,
         animations: animations,
-        originalMaterial: material,
+        originalMaterial: materials[0],
+        colorPreset: colorPreset,
     };
 }
 
@@ -204,12 +226,66 @@ function createSkeletonBones() {
 // ============================================
 
 function createHumanoidGeometry() {
-    const geometry = new THREE.CylinderGeometry(0.3, 0.3, 1.8, 16, 8);
-    
+    // Create separate geometries for each body part with material groups
+    const geometries = [];
+
+    // Head geometry (box)
+    const headGeom = new THREE.BoxGeometry(0.3, 0.35, 0.28);
+    headGeom.translate(0, 0.9, 0);
+    geometries.push({ geometry: headGeom, materialIndex: 0 });
+
+    // Torso geometry (tall box)
+    const torsoGeom = new THREE.BoxGeometry(0.45, 0.5, 0.3);
+    torsoGeom.translate(0, 0.55, 0);
+    geometries.push({ geometry: torsoGeom, materialIndex: 1 });
+
+    // Left upper arm
+    const leftUpperArmGeom = new THREE.BoxGeometry(0.12, 0.35, 0.12);
+    leftUpperArmGeom.translate(-0.35, 0.65, 0);
+    geometries.push({ geometry: leftUpperArmGeom, materialIndex: 2 });
+
+    // Left lower arm
+    const leftLowerArmGeom = new THREE.BoxGeometry(0.1, 0.35, 0.1);
+    leftLowerArmGeom.translate(-0.38, 0.3, 0);
+    geometries.push({ geometry: leftLowerArmGeom, materialIndex: 3 });
+
+    // Right upper arm
+    const rightUpperArmGeom = new THREE.BoxGeometry(0.12, 0.35, 0.12);
+    rightUpperArmGeom.translate(0.35, 0.65, 0);
+    geometries.push({ geometry: rightUpperArmGeom, materialIndex: 4 });
+
+    // Right lower arm
+    const rightLowerArmGeom = new THREE.BoxGeometry(0.1, 0.35, 0.1);
+    rightLowerArmGeom.translate(0.38, 0.3, 0);
+    geometries.push({ geometry: rightLowerArmGeom, materialIndex: 5 });
+
+    // Left thigh
+    const leftThighGeom = new THREE.BoxGeometry(0.16, 0.45, 0.16);
+    leftThighGeom.translate(-0.2, 0.1, 0);
+    geometries.push({ geometry: leftThighGeom, materialIndex: 6 });
+
+    // Left calf
+    const leftCalfGeom = new THREE.BoxGeometry(0.14, 0.45, 0.14);
+    leftCalfGeom.translate(-0.2, -0.35, 0);
+    geometries.push({ geometry: leftCalfGeom, materialIndex: 7 });
+
+    // Right thigh
+    const rightThighGeom = new THREE.BoxGeometry(0.16, 0.45, 0.16);
+    rightThighGeom.translate(0.2, 0.1, 0);
+    geometries.push({ geometry: rightThighGeom, materialIndex: 8 });
+
+    // Right calf
+    const rightCalfGeom = new THREE.BoxGeometry(0.14, 0.45, 0.14);
+    rightCalfGeom.translate(0.2, -0.35, 0);
+    geometries.push({ geometry: rightCalfGeom, materialIndex: 9 });
+
+    // Merge all geometries with material groups
+    const result = mergeGeometriesWithGroups(geometries);
+
     // Add skinning data
-    const position = geometry.attributes.position;
+    const position = result.geometry.attributes.position;
     const vertex = new THREE.Vector3();
-    
+
     const skinIndices = [];
     const skinWeights = [];
 
@@ -218,14 +294,15 @@ function createHumanoidGeometry() {
 
         // Simple skinning based on Y position
         const y = vertex.y;
+        const x = vertex.x;
         let indices = [0, 0, 0, 0];
         let weights = [0, 0, 0, 0];
 
-        if (y > 0.6) {
-            // Head/neck region
+        if (y > 0.75) {
+            // Head region
             indices = [5, 4, 0, 0]; // Head, Neck
             weights = [0.7, 0.3, 0, 0];
-        } else if (y > 0.3) {
+        } else if (y > 0.35) {
             // Upper torso
             indices = [3, 2, 0, 0]; // Spine2, Spine1
             weights = [0.6, 0.4, 0, 0];
@@ -233,9 +310,9 @@ function createHumanoidGeometry() {
             // Lower torso
             indices = [1, 0, 0, 0]; // Spine, Hips
             weights = [0.6, 0.4, 0, 0];
-        } else if (y > -0.5) {
+        } else if (y > -0.2) {
             // Upper legs
-            if (vertex.x > 0) {
+            if (x > 0) {
                 indices = [14, 0, 0, 0]; // LeftUpLeg, Hips
                 weights = [0.7, 0.3, 0, 0];
             } else {
@@ -244,7 +321,7 @@ function createHumanoidGeometry() {
             }
         } else {
             // Lower legs/feet
-            if (vertex.x > 0) {
+            if (x > 0) {
                 indices = [15, 16, 0, 0]; // LeftLeg, LeftFoot
                 weights = [0.6, 0.4, 0, 0];
             } else {
@@ -257,10 +334,74 @@ function createHumanoidGeometry() {
         skinWeights.push(weights[0], weights[1], weights[2], weights[3]);
     }
 
-    geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
-    geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
+    result.geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
+    result.geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
 
-    return geometry;
+    return result.geometry;
+}
+
+// Helper function to merge geometries
+function mergeGeometries(geometries) {
+    const position = [];
+    const normal = [];
+
+    for (let i = 0; i < geometries.length; i++) {
+        const geom = geometries[i];
+        const posAttr = geom.attributes.position;
+        const normAttr = geom.attributes.normal;
+
+        for (let j = 0; j < posAttr.count; j++) {
+            position.push(posAttr.getX(j), posAttr.getY(j), posAttr.getZ(j));
+            normal.push(normAttr.getX(j), normAttr.getY(j), normAttr.getZ(j));
+        }
+    }
+
+    const mergedGeom = new THREE.BufferGeometry();
+    mergedGeom.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+    mergedGeom.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
+
+    return mergedGeom;
+}
+
+// Helper function to merge geometries with material groups
+function mergeGeometriesWithGroups(geometryInfos) {
+    const position = [];
+    const normal = [];
+    const groups = [];
+
+    let vertexOffset = 0;
+
+    for (let i = 0; i < geometryInfos.length; i++) {
+        const { geometry, materialIndex } = geometryInfos[i];
+        const posAttr = geometry.attributes.position;
+        const normAttr = geometry.attributes.normal;
+
+        // Track group start
+        groups.push({
+            start: vertexOffset,
+            count: posAttr.count,
+            materialIndex: materialIndex
+        });
+
+        // Copy vertices and normals
+        for (let j = 0; j < posAttr.count; j++) {
+            position.push(posAttr.getX(j), posAttr.getY(j), posAttr.getZ(j));
+            normal.push(normAttr.getX(j), normAttr.getY(j), normAttr.getZ(j));
+        }
+
+        vertexOffset += posAttr.count;
+    }
+
+    const mergedGeom = new THREE.BufferGeometry();
+    mergedGeom.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+    mergedGeom.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
+
+    // Add material groups
+    for (const group of groups) {
+        mergedGeom.addGroup(group.start, group.count, group.materialIndex);
+    }
+
+    return { geometry: mergedGeom };
 }
 
 // ============================================
