@@ -225,28 +225,28 @@ function applyHitstop(intensity = 1.0) {
 
     const freezeDuration = baseDuration * (0.5 + 0.5 * i);
 
-    HitstopState.freezeRemaining = Math.max(HitstopState.freezeRemaining, freezeDuration);
-    HitstopState.recoveryRemaining = 0;
+    hitstopState.freezeRemaining = Math.max(hitstopState.freezeRemaining, freezeDuration);
+    hitstopState.recoveryRemaining = 0;
     GameState.timeScale = 0;
 }
 
 function updateHitstop(rawDt) {
-    if (HitstopState.freezeRemaining > 0) {
-        HitstopState.freezeRemaining = Math.max(0, HitstopState.freezeRemaining - rawDt);
+    if (hitstopState.freezeRemaining > 0) {
+        hitstopState.freezeRemaining = Math.max(0, hitstopState.freezeRemaining - rawDt);
         GameState.timeScale = 0;
 
-        if (HitstopState.freezeRemaining <= 0) {
-            HitstopState.recoveryRemaining = GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME;
+        if (hitstopState.freezeRemaining <= 0) {
+            hitstopState.recoveryRemaining = GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME;
         }
 
         return;
     }
 
-    if (HitstopState.recoveryRemaining > 0) {
-        HitstopState.recoveryRemaining = Math.max(0, HitstopState.recoveryRemaining - rawDt);
+    if (hitstopState.recoveryRemaining > 0) {
+        hitstopState.recoveryRemaining = Math.max(0, hitstopState.recoveryRemaining - rawDt);
 
         const recoveryTime = Math.max(0.0001, GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME);
-        const linearT = clamp01(1 - (HitstopState.recoveryRemaining / recoveryTime));
+        const linearT = clamp01(1 - (hitstopState.recoveryRemaining / recoveryTime));
         GameState.timeScale = linearT * linearT;
         return;
     }
@@ -353,6 +353,7 @@ let DopaminePopupSystem = null;
 
 // Game Feel Overhaul Systems
 let ImpactFrameManager = null;
+let hitstopState;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -541,6 +542,22 @@ function initThreeWorld() {
 
     // Load saved graphics preset
     GraphicsState.currentPreset = getActivePreset();
+
+    // Initialize hitstop state (global)
+    hitstopState = {
+        isActive: false,
+        framesRemaining: 0,
+        timeScale: 1.0,
+        freezeRemaining: 0,
+        recoveryRemaining: 0,
+        resetToNormal: function() {
+            this.isActive = false;
+            this.framesRemaining = 0;
+            this.timeScale = 1.0;
+            this.freezeRemaining = 0;
+            this.recoveryRemaining = 0;
+        }
+    };
 
     World3D = createWorld({ canvas: UI.canvas, autoResize: true });
 
@@ -812,10 +829,13 @@ function gameLoop(currentTime) {
     updateImpactFrame(deltaTime);
     updateScreenShake(deltaTime);
 
-    const scaledDeltaTime = deltaTime * GameState.timeScale;
+    hitstopState.isActive = GameState.timeScale === 0;
+    hitstopState.timeScale = GameState.timeScale;
+
+    const finalDelta = hitstopState.isActive ? 0 : (deltaTime * hitstopState.timeScale);
 
     if (!GameState.isPaused) {
-        update(scaledDeltaTime, deltaTime);
+        update(finalDelta, deltaTime);
 
         // Check for auto-downgrade/upgrade every 2 seconds
         if (currentTime - GraphicsState.lastFpsCheckTime > 2000) {
