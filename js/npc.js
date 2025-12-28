@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { GAME_CONFIG, GRAPHICS_PRESETS, SATIRICAL_TEXTS, DOPAMINE_CONFIG, JUICE_SPRINT_CONFIG } from './config.js';
 import { applyToonMaterial } from './world.js';
 import { audioEngine } from './audio-engine.js';
+import { createLowPolyHumanoid, createEmotionSystem, getRandomColorPreset, EMOTIONS } from './lowpoly-characters.js';
 
 const NPC_STATES = {
     IDLE: 'IDLE',
@@ -29,44 +30,49 @@ function pickRandomXZDirection() {
 }
 
 export function createNPC(position = new THREE.Vector3()) {
-    const group = new THREE.Group();
+    // Create low-poly humanoid mesh with random colors
+    const colorPreset = getRandomColorPreset();
+    const humanoid = createLowPolyHumanoid(colorPreset, false);
+    const group = humanoid.group;
     group.name = 'NPC';
 
-    const bodyHeight = 1.1;
-    const radius = 0.45;
+    // Get references to body parts
+    const head = humanoid.head;
+    const torso = humanoid.torso;
+    const body = torso; // Alias for compatibility
+    const face = humanoid.face;
+    const leftArm = humanoid.leftArm;
+    const rightArm = humanoid.rightArm;
+    const leftLeg = humanoid.leftLeg;
+    const rightLeg = humanoid.rightLeg;
+    const materials = humanoid.materials;
 
-    const bodyGeometry = new THREE.CylinderGeometry(radius, radius, bodyHeight, 7);
-    const body = new THREE.Mesh(bodyGeometry);
-    applyToonMaterial(body, 'NPC_HOSTILE', 1.1);
-    body.castShadow = true;
-    body.receiveShadow = true;
-    body.position.y = bodyHeight / 2 + radius * 0.8;
-    group.add(body);
+    // Create emotion system
+    const emotionSystem = createEmotionSystem(face);
 
-    const headGeometry = new THREE.SphereGeometry(radius * 0.75, 7, 7);
-    const head = new THREE.Mesh(headGeometry);
-    applyToonMaterial(head, 'NPC_HOSTILE', 1.15);
-    head.castShadow = true;
-    head.receiveShadow = true;
-    head.position.y = bodyHeight + radius * 1.55;
-    group.add(head);
+    // HEAVY variant visual (larger, darker low-poly humanoid)
+    const heavyGroup = new THREE.Group();
+    heavyGroup.visible = false;
+    heavyGroup.scale.setScalar(1.5);
 
-    // HEAVY variant visual (dark cube, immune to punch knockback)
-    const heavyGeometry = new THREE.BoxGeometry(radius * 2.6, bodyHeight * 1.9, radius * 2.6);
-    const heavyCube = new THREE.Mesh(heavyGeometry);
-    applyToonMaterial(heavyCube, 'NPC_HEAVY', 1.08);
-    heavyCube.castShadow = true;
-    heavyCube.receiveShadow = true;
-    heavyCube.position.y = bodyHeight * 0.95 + radius * 0.6;
-    heavyCube.visible = false;
-    group.add(heavyCube);
+    // Heavy uses same structure but darker materials
+    const heavyColorPreset = {
+        torso: 0x333333,
+        arms: 0x333333,
+        legs: 0x222222,
+    };
+    const heavyHumanoid = createLowPolyHumanoid(heavyColorPreset, false);
+    const heavyMesh = heavyHumanoid.group;
+    heavyGroup.add(heavyMesh);
+    group.add(heavyGroup);
 
+    // Direction indicator (for attack animations)
     const indicatorGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.35);
     const indicatorMaterial = new THREE.MeshToonMaterial({
         color: 0x222222,
     });
     const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
-    indicator.position.set(0, bodyHeight / 2 + radius * 0.8, radius + 0.2);
+    indicator.position.set(0, 1.1, 0.5);
     group.add(indicator);
 
     group.position.copy(position);
@@ -91,7 +97,7 @@ export function createNPC(position = new THREE.Vector3()) {
         despawnTimer: 0,
         ragdollSpin: randRange(-1, 1),
         ragdollTilt: new THREE.Vector3(randRange(-1, 1), 0, randRange(-1, 1)).normalize(),
-        baseColor: body.material.color.clone(),
+        baseColor: materials.body.color.clone(),
 
         // Furia System (Venganza Física)
         lastAttacker: null,      // Quién me golpeó por última vez
@@ -132,22 +138,31 @@ export function createNPC(position = new THREE.Vector3()) {
         panicDuration: 3.0,
         consecutiveHits: 0,
         lastHitComboCount: 0,
+
+        // Emotion System
+        currentEmotion: EMOTIONS.NEUTRAL,
+        emotionDuration: 0,
+
+        // Impact tracking for knocked_out emotion
+        recentImpacts: [],
+        lastImpactTime: 0,
     };
 
     const BASIC_MAX_HEALTH = 60;
     const HEAVY_MAX_HEALTH = 150;
 
-    const BASIC_COLOR = new THREE.Color(GRAPHICS_PRESETS.FLAT_COLORS.NPC_HOSTILE);
-    const HEAVY_COLOR = new THREE.Color(GRAPHICS_PRESETS.FLAT_COLORS.NPC_HEAVY);
-
     function getVisualMeshes() {
-        return state.type === 'HEAVY' ? [heavyCube] : [body, head];
+        return state.type === 'HEAVY' ? [heavyMesh] : [torso, head];
     }
 
     function setVisualColor(color) {
-        const meshes = getVisualMeshes();
-        for (let i = 0; i < meshes.length; i++) {
-            meshes[i].material.color.copy(color);
+        if (state.type === 'HEAVY') {
+            heavyHumanoid.materials.body.color.copy(color);
+            heavyHumanoid.materials.arm.color.copy(color);
+            heavyHumanoid.materials.leg.color.copy(color);
+        } else {
+            materials.body.color.copy(color);
+            materials.arm.color.copy(color);
         }
     }
 
@@ -155,22 +170,26 @@ export function createNPC(position = new THREE.Vector3()) {
         state.type = type === 'HEAVY' ? 'HEAVY' : 'BASIC';
 
         const isHeavy = state.type === 'HEAVY';
-        body.visible = !isHeavy;
+        torso.visible = !isHeavy;
         head.visible = !isHeavy;
-        heavyCube.visible = isHeavy;
+        leftArm.visible = !isHeavy;
+        rightArm.visible = !isHeavy;
+        leftLeg.visible = !isHeavy;
+        rightLeg.visible = !isHeavy;
+        face.visible = !isHeavy;
+        indicator.visible = !isHeavy;
+        heavyGroup.visible = isHeavy;
 
         if (isHeavy) {
             group.scale.setScalar(1.5);
             state.maxHealth = HEAVY_MAX_HEALTH;
-            indicator.material.color.setHex(0x330000);
-            state.baseColor.copy(HEAVY_COLOR);
-            setVisualColor(HEAVY_COLOR);
+            state.baseColor.copy(new THREE.Color(0x333333));
+            setVisualColor(state.baseColor);
         } else {
             group.scale.setScalar(1.0);
             state.maxHealth = BASIC_MAX_HEALTH;
-            indicator.material.color.setHex(0x222222);
-            state.baseColor.copy(BASIC_COLOR);
-            setVisualColor(BASIC_COLOR);
+            state.baseColor.copy(new THREE.Color(colorPreset.torso));
+            setVisualColor(state.baseColor);
         }
 
         state.health = state.maxHealth;
@@ -240,18 +259,102 @@ export function createNPC(position = new THREE.Vector3()) {
         state.panicTimer = 0;
         state.consecutiveHits = 0;
         state.lastHitComboCount = 0;
-        head.material.emissiveIntensity = 0;
+
+        // Emotion System reset
+        emotionSystem.setEmotion(EMOTIONS.NEUTRAL, 0);
+        state.currentEmotion = EMOTIONS.NEUTRAL;
+        state.emotionDuration = 0;
+        state.recentImpacts = [];
+        state.lastImpactTime = 0;
 
         // Reset mesh scales
-        body.scale.set(1, 1, 1);
+        torso.scale.set(1, 1, 1);
         head.scale.set(1, 1, 1);
-        heavyCube.scale.set(1, 1, 1);
 
         indicator.visible = true;
         setVisualColor(state.baseColor);
         group.rotation.set(0, 0, 0);
         group.position.copy(newPosition);
         setActive(true);
+    }
+
+    // ============================================
+    // EMOTION SYSTEM METHODS
+    // ============================================
+
+    /**
+     * Set NPC emotion
+     * @param {string} emotion - 'neutral', 'panic', 'knocked_out'
+     * @param {number} duration - Duration in milliseconds
+     */
+    function setEmotion(emotion, duration = 2000) {
+        emotionSystem.setEmotion(emotion, duration);
+        state.currentEmotion = emotion;
+        state.emotionDuration = duration;
+
+        // Visual feedback for different emotions
+        if (emotion === EMOTIONS.PANIC) {
+            // Flash orange briefly on panic
+            materials.body.color.setHex(0xffaa00);
+            setTimeout(() => {
+                if (state.active) {
+                    materials.body.color.setHex(state.baseColor.getHex());
+                }
+            }, 200);
+        } else if (emotion === EMOTIONS.KNOCKED_OUT) {
+            // Gray out on knocked out
+            materials.body.color.setHex(0x666666);
+        } else if (emotion === EMOTIONS.NEUTRAL) {
+            // Restore normal color
+            materials.body.color.copy(state.baseColor);
+        }
+    }
+
+    /**
+     * Update emotion system
+     * @param {number} delta - Delta time in milliseconds
+     */
+    function updateEmotions(delta) {
+        emotionSystem.update(delta);
+
+        // Auto-recovery for knocked_out
+        if (state.currentEmotion === EMOTIONS.KNOCKED_OUT && state.emotionDuration <= 0) {
+            setEmotion(EMOTIONS.NEUTRAL, 0);
+        }
+
+        state.emotionDuration = emotionSystem.state.emotionDuration;
+        state.currentEmotion = emotionSystem.state.currentEmotion;
+    }
+
+    /**
+     * Record an impact for knocked_out detection
+     * @param {number} force - Impact force magnitude
+     */
+    function recordImpact(force) {
+        const now = performance.now();
+        state.recentImpacts.push({ force, time: now });
+
+        // Remove old impacts outside the 2-second window
+        state.recentImpacts = state.recentImpacts.filter(
+            impact => now - impact.time < 2000
+        );
+
+        // Calculate total impact force
+        const totalForce = state.recentImpacts.reduce((sum, impact) => sum + impact.force, 0);
+        const impactCount = state.recentImpacts.length;
+
+        // Check if should trigger knocked_out (threshold: 200 force OR 3+ hits with 150+ total)
+        if (force > 200 || (impactCount >= 3 && totalForce > 150)) {
+            setEmotion(EMOTIONS.KNOCKED_OUT, 4000); // 4 seconds
+
+            // Stop AI movement briefly
+            state.velocity.multiplyScalar(0.1);
+
+            // Play dizzy effect
+            startDizzy();
+        }
+
+        state.lastImpactTime = now;
     }
 
     function enterRagdoll(duration, options = {}) {
@@ -266,8 +369,8 @@ export function createNPC(position = new THREE.Vector3()) {
         state.justEnteredRagdoll = true;
         state.ragdollImpactSpeed = state.velocity.length();
 
-        // Visual feedback
-        setVisualColor(new THREE.Color(0xaaaaaa));
+        // Set panic emotion when entering ragdoll
+        setEmotion(EMOTIONS.PANIC, duration * 1000);
 
         if (playSound) {
             const intensity = Math.min(1.0, state.ragdollImpactSpeed / 15);
@@ -289,12 +392,13 @@ export function createNPC(position = new THREE.Vector3()) {
         // Restore previous state or default to wander
         state.state = state.savedState || NPC_STATES.WANDER;
         state.savedState = null;
-        
+
         // Reset rotation (NPC stands up)
         group.rotation.set(0, group.rotation.y, 0);
-        
-        // Restore color
+
+        // Restore color and emotion
         setVisualColor(state.baseColor);
+        setEmotion(EMOTIONS.NEUTRAL, 0);
     }
 
     function enterSuspension(duration) {
@@ -322,13 +426,13 @@ export function createNPC(position = new THREE.Vector3()) {
 
         const { comboCount = 0 } = options;
 
+        // Record impact for emotion system
+        if (impulse > 0) {
+            recordImpact(impulse);
+        }
+
         // Visual validation: Flash white on damage
         setVisualColor(new THREE.Color(0xffffff));
-
-        // PANIC SYSTEM: Glowing eyes before attack, panic after 3 consecutive hits
-        // Make eyes glow with emissive material (intense warning)
-        head.material.emissive.setHex(0xffffff);
-        head.material.emissiveIntensity = 2.0;
 
         // Track consecutive hits for panic activation
         if (comboCount > 0 && comboCount >= state.lastHitComboCount) {
@@ -416,7 +520,12 @@ export function createNPC(position = new THREE.Vector3()) {
         const dir = targetPos.clone().sub(group.position).setY(0);
 
         // Exaggerated punch animation: quick scale / indicator flash
-        indicator.material.emissiveIntensity = 1.0;
+        indicator.material.color.setHex(0xffffff);
+        setTimeout(() => {
+            if (state.active) {
+                indicator.material.color.setHex(0x222222);
+            }
+        }, 100);
 
         if (typeof target.takeDamage === 'function') {
             if (target.mesh) {
@@ -485,6 +594,9 @@ export function createNPC(position = new THREE.Vector3()) {
         state.lastDamageTime += dt;
         state.collisionShakeCooldown = Math.max(0, state.collisionShakeCooldown - dt);
         state.decalCooldown = Math.max(0, state.decalCooldown - dt);
+
+        // Update emotion system
+        updateEmotions(dt * 1000); // Convert to milliseconds
 
         // Furia System: Update furia timer
         if (state.furia > 0) {
@@ -704,13 +816,7 @@ export function createNPC(position = new THREE.Vector3()) {
         // Visual hit flash decay
         if (state.lastDamageTime > 0.08) {
             setVisualColor(state.baseColor);
-            indicator.material.emissiveIntensity = 0.25;
             indicator.visible = state.state !== NPC_STATES.DEAD;
-        }
-
-        // Decrement eye glow after damage
-        if (head.material.emissiveIntensity > 0) {
-            head.material.emissiveIntensity = Math.max(0, head.material.emissiveIntensity - dt * 10);
         }
 
         // Update squash & stretch recovery (knockback easing)
@@ -722,14 +828,22 @@ export function createNPC(position = new THREE.Vector3()) {
             const scaleXZ = (1.0 - 0.3) + (0.3 * recoveryProgress);
             const scaleY = (1.0 + 0.3) - (0.3 * recoveryProgress);
 
-            body.scale.set(scaleXZ, scaleY, scaleXZ);
-            head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
-            heavyCube.scale.set(scaleXZ, scaleY, scaleXZ);
+            if (state.type === 'HEAVY') {
+                heavyHumanoid.torso.scale.set(scaleXZ, scaleY, scaleXZ);
+                heavyHumanoid.head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
+            } else {
+                torso.scale.set(scaleXZ, scaleY, scaleXZ);
+                head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
+            }
         } else {
             // Ensure normal scale
-            body.scale.set(1, 1, 1);
-            head.scale.set(1, 1, 1);
-            heavyCube.scale.set(1, 1, 1);
+            if (state.type === 'HEAVY') {
+                heavyHumanoid.torso.scale.set(1, 1, 1);
+                heavyHumanoid.head.scale.set(1, 1, 1);
+            } else {
+                torso.scale.set(1, 1, 1);
+                head.scale.set(1, 1, 1);
+            }
         }
 
         if (state.state === NPC_STATES.DEAD) {
@@ -998,6 +1112,7 @@ export function createNPC(position = new THREE.Vector3()) {
         mesh: group,
         body,
         head,
+        face,
         indicator,
         state,
         update,
@@ -1011,6 +1126,8 @@ export function createNPC(position = new THREE.Vector3()) {
         exitRagdoll,
         enterSuspension,
         exitSuspension,
+        setEmotion,
+        recordImpact,
         getState: () => ({ ...state }),
     };
 

@@ -85,13 +85,19 @@ export function createGrabSystem(player, camera, scene, gameState, options = {})
         grabState.springVelocity.set(0, 0, 0);
         
         console.log(`[GrabSystem] Grabbed ${target.type}`);
-        
+
         // Start charging audio
         startChargeAudio();
-        
-        // Put NPC in ragdoll if applicable
-        if (target.type === 'NPC' && target.object.setRagdoll) {
-            target.object.setRagdoll(true);
+
+        // Put NPC in ragdoll and set panic emotion
+        if (target.type === 'NPC') {
+            if (target.object.enterRagdoll) {
+                target.object.enterRagdoll(999); // Long duration while grabbed
+            }
+            // Set panic emotion when grabbed
+            if (target.object.setEmotion) {
+                target.object.setEmotion('panic', 99999); // Infinite panic while grabbed
+            }
         }
     }
     
@@ -169,12 +175,17 @@ export function createGrabSystem(player, camera, scene, gameState, options = {})
         const launchVelocity = cameraDir.multiplyScalar(velocity);
         
         console.log(`[GrabSystem] Launching ${objectType} at ${velocity.toFixed(1)} u/s (charge: ${grabState.chargeLevel}%)`);
-        
+
         // Apply velocity to object
         if (grabState.grabObject.state) {
             grabState.grabObject.state.velocity = launchVelocity.clone();
             grabState.grabObject.state.isLaunched = true;
             grabState.grabObject.state.launchChargeLevel = grabState.chargeLevel;
+        }
+
+        // Set panic emotion for launched NPC (will auto-recover when they land)
+        if (objectType === 'NPC' && grabState.grabObject.setEmotion) {
+            grabState.grabObject.setEmotion('panic', 3000); // 3 seconds of panic after launch
         }
         
         // Store launch data for impact handling
@@ -280,17 +291,22 @@ export function createGrabSystem(player, camera, scene, gameState, options = {})
                 const direction = npc.mesh.position.clone().sub(position).normalize();
                 const falloff = 1 - (dist / radius);
                 const impulse = direction.multiplyScalar(force * falloff);
-                
+
                 // Apply impulse
                 if (npc.state.velocity) {
                     npc.state.velocity.add(impulse.multiplyScalar(0.01)); // Scale for reasonable force
                 }
-                
-                // Put in ragdoll
-                if (npc.setRagdoll) {
-                    npc.setRagdoll(true);
+
+                // Record impact for emotion system
+                if (npc.recordImpact) {
+                    npc.recordImpact(force * falloff);
                 }
-                
+
+                // Put in ragdoll
+                if (npc.enterRagdoll) {
+                    npc.enterRagdoll(2.0);
+                }
+
                 console.log(`[GrabSystem] Applied explosion force to NPC at ${dist.toFixed(1)}m`);
             }
         }
