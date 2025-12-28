@@ -6,43 +6,28 @@
 import * as THREE from 'three';
 import { GAME_CONFIG, PHYSICS_CONFIG, GRAPHICS_PRESETS } from './config.js';
 import { applyToonMaterial } from './world.js';
+import { createLowPolyHumanoid, createPlayerCloth, EMOTIONS } from './lowpoly-characters.js';
 
 export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
-    const group = new THREE.Group();
+    // Create low-poly humanoid for player (with unique appearance)
+    const playerColorPreset = {
+        torso: 0xffffff,
+        arms: 0xffffff,
+        legs: 0x333333,
+    };
+    const humanoid = createLowPolyHumanoid(playerColorPreset, true); // true = isPlayer
+    const group = humanoid.group;
     group.name = 'Player';
 
-    // Player body (capsule-like shape using cylinder + spheres)
-    const bodyHeight = GAME_CONFIG.PLAYER.HEIGHT - GAME_CONFIG.PLAYER.RADIUS * 2;
-    const bodyGeometry = new THREE.CylinderGeometry(
-        GAME_CONFIG.PLAYER.RADIUS,
-        GAME_CONFIG.PLAYER.RADIUS,
-        bodyHeight,
-        8
-    );
-    const body = new THREE.Mesh(bodyGeometry);
-    applyToonMaterial(body, 'PLAYER', 1.1);
-    body.castShadow = true;
-    body.receiveShadow = true;
-    body.position.y = bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS;
-    group.add(body);
-
-    // Top sphere (head)
-    const headGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.8, 8, 8);
-    const head = new THREE.Mesh(headGeometry);
-    applyToonMaterial(head, 'PLAYER', 1.15);
-    head.castShadow = true;
-    head.receiveShadow = true;
-    head.position.y = bodyHeight + GAME_CONFIG.PLAYER.RADIUS * 1.8;
-    group.add(head);
-
-    // Bottom sphere (feet area)
-    const feetGeometry = new THREE.SphereGeometry(GAME_CONFIG.PLAYER.RADIUS * 0.6, 8, 6);
-    const feet = new THREE.Mesh(feetGeometry);
-    applyToonMaterial(feet, 'PLAYER', 1.2);
-    feet.castShadow = true;
-    feet.receiveShadow = true;
-    feet.position.y = GAME_CONFIG.PLAYER.RADIUS * 0.6;
-    group.add(feet);
+    // Get references to body parts
+    const body = humanoid.torso;
+    const head = humanoid.head;
+    const face = humanoid.face;
+    const leftArm = humanoid.leftArm;
+    const rightArm = humanoid.rightArm;
+    const leftLeg = humanoid.leftLeg;
+    const rightLeg = humanoid.rightLeg;
+    const materials = humanoid.materials;
 
     // Direction indicator
     const indicatorGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.4);
@@ -50,16 +35,20 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         color: 0x333333,
     });
     const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
-    indicator.position.set(0, bodyHeight / 2 + GAME_CONFIG.PLAYER.RADIUS, GAME_CONFIG.PLAYER.RADIUS + 0.2);
+    indicator.position.set(0, 1.1, 0.5);
     group.add(indicator);
+
+    // Create optional cloth cape
+    const cloth = createPlayerCloth(group);
 
     // Set initial position
     group.position.copy(position);
 
     // Original materials for flash effect
-    const originalBodyMaterial = body.material.clone();
-    const originalHeadMaterial = head.material.clone();
-    const originalFeetMaterial = feet.material.clone();
+    const originalBodyMaterial = materials.body.clone();
+    const originalHeadMaterial = materials.head.clone();
+    const originalArmMaterial = materials.arm.clone();
+    const originalLegMaterial = materials.leg.clone();
 
     // Player state
     const state = {
@@ -100,14 +89,16 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
             state.flashTime -= deltaTime;
             if (state.flashTime <= 0) {
                 // Restore original materials
-                body.material = originalBodyMaterial;
-                head.material = originalHeadMaterial;
-                feet.material = originalFeetMaterial;
+                materials.body = originalBodyMaterial;
+                materials.head = originalHeadMaterial;
+                materials.arm = originalArmMaterial;
+                materials.leg = originalLegMaterial;
             } else {
                 // Flash white
-                body.material.color.setHex(0xffffff);
-                head.material.color.setHex(0xffffff);
-                feet.material.color.setHex(0xffffff);
+                materials.body.color.setHex(0xffffff);
+                materials.head.color.setHex(0xffffff);
+                materials.arm.color.setHex(0xffffff);
+                materials.leg.color.setHex(0xffffff);
             }
         }
 
@@ -264,6 +255,11 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         if (Math.abs(group.position.z) > maxDistance) {
             group.position.z = Math.sign(group.position.z) * maxDistance;
         }
+
+        // Update cloth simulation
+        if (cloth && state.isMoving) {
+            cloth.update(deltaTime, moveDirection);
+        }
     }
 
     function updateRagdoll(deltaTime) {
@@ -361,9 +357,10 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         state.ragdollSpin = 0;
 
         // Change materials to show death
-        body.material.color.setHex(0x444444);
-        head.material.color.setHex(0x444444);
-        feet.material.color.setHex(0x444444);
+        materials.body.color.setHex(0x444444);
+        materials.head.color.setHex(0x444444);
+        materials.arm.color.setHex(0x444444);
+        materials.leg.color.setHex(0x444444);
     }
 
     function respawn(position) {
@@ -377,9 +374,10 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         state.isGrounded = true;
 
         // Restore materials
-        body.material = originalBodyMaterial;
-        head.material = originalHeadMaterial;
-        feet.material = originalFeetMaterial;
+        materials.body = originalBodyMaterial;
+        materials.head = originalHeadMaterial;
+        materials.arm = originalArmMaterial;
+        materials.leg = originalLegMaterial;
 
         // Reset position
         group.position.copy(position);
@@ -399,7 +397,11 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         mesh: group,
         body,
         head,
-        feet,
+        face,
+        leftArm,
+        rightArm,
+        leftLeg,
+        rightLeg,
         indicator,
         state,
         update,

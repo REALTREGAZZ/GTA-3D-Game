@@ -177,6 +177,11 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
             npc.state.velocity.copy(knockbackVel);
         }
 
+        // Record impact for emotion system (knocked_out detection)
+        if (typeof npc.recordImpact === 'function') {
+            npc.recordImpact(force);
+        }
+
         // Enter ragdoll state
         if (typeof npc.enterRagdoll === 'function') {
             const ragdollDuration = GAME_CONFIG.COMBAT.RAGDOLL_DURATION || 2.0;
