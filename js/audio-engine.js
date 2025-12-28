@@ -562,6 +562,75 @@ class AudioEngine {
     }
 
     /**
+     * Play generic SFX with options
+     * @param {string} type - Sound type ('launch', 'impact', etc.)
+     * @param {THREE.Vector3} position - Sound position
+     * @param {Object} options - { pitch, volume }
+     */
+    playSFX(type, position = null, options = {}) {
+        if (!this.enabled || !this.audioContext) {
+            this.init();
+            if (!this.audioContext) return;
+        }
+
+        const { pitch = 1.0, volume = 0.5 } = options;
+
+        // Map to existing synth sounds
+        const typeMap = {
+            'launch': 'WHOOSH',
+            'impact': 'IMPACT',
+            'charge': 'CHARGE',
+        };
+
+        const synthType = typeMap[type] || 'IMPACT';
+        this.playSynthSound(synthType, position, volume * pitch);
+    }
+
+    /**
+     * Play low bass impact sound
+     * @param {number} pitch - Pitch multiplier
+     */
+    playLowBass(pitch = 1.0) {
+        if (!this.enabled || !this.audioContext) {
+            this.init();
+            if (!this.audioContext) return;
+        }
+
+        const ctx = this.audioContext;
+        const now = ctx.currentTime;
+
+        // Create gain node
+        const gainNode = ctx.createGain();
+        
+        // Connect to master gain (for ducking support)
+        if (this.masterGain) {
+            gainNode.connect(this.masterGain);
+        } else {
+            gainNode.connect(ctx.destination);
+        }
+
+        // Create low bass oscillator
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        
+        // Low bass frequency with pitch variation
+        const baseFreq = 80 * pitch;
+        const endFreq = Math.max(40, baseFreq * 0.5);
+        
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.2);
+        
+        // Aggressive volume envelope
+        const volume = 0.4;
+        gainNode.gain.setValueAtTime(volume, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        
+        osc.connect(gainNode);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    /**
      * Dispose and cleanup
      */
     dispose() {

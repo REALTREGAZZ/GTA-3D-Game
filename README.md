@@ -62,10 +62,12 @@ project/
 - `F` - Entrar en vehículo
 
 ### Combate
-- `Clic Izquierdo` - Atacar
-- `Clic Derecho` - Apuntar
-- `R` - Recargar
-- `Tab` / `Q` - Cambiar arma
+- `Clic Izquierdo` - Atacar (Puño)
+- `Clic Derecho` - Atacar (Pistola)
+- `Q` - Cambiar arma
+- `Tab` - Cambiar objetivo
+- `G` (mantener) - Agarrar y cargar objeto
+- `G` (soltar) - Lanzar objeto cargado
 
 ### Cámara
 - `Rueda del ratón` / `+` / `-` - Zoom
@@ -82,6 +84,33 @@ project/
 - `D` / `→` - Girar derecha
 - `Espacio` - Freno de mano
 - `H` - Bocina
+
+## 🎯 Grab & Launch Entropy System
+
+**"God of Chaos" Mode** - Transform into an unstoppable force with the power to grab and launch any object!
+
+### Features:
+- **Grab Mechanic**: Press and hold `G` to grab the nearest NPC/object within 5 units
+- **Kinetic Charging**: Objects charge up automatically (0-100% in ~2 seconds)
+  - Visual color transition: White → Yellow → Red
+  - Orbital particle trail increases with charge
+  - Audio pitch sweep from 400Hz to 800Hz
+- **Launch System**: Release `G` or auto-launch at 100% charge
+  - Base velocity: 150-350 units/s (scales with charge)
+  - Vehicle multiplier: 3x speed (450-1050 u/s)
+  - NPCs ragdoll and fly through the air
+- **Impact Effects**:
+  - Gore-neon particle explosions (50-200 particles in fluorescent colors)
+  - Radial explosion force affects nearby NPCs
+  - Screen shake intensity scales with object type (2x normal, 3x vehicles)
+  - Impact frames: 3 frames for NPCs, 6 frames for vehicles
+  - Glitch visual effects with chromatic aberration
+  - Audio ducking for massive impacts (-9dB)
+
+### Object Type Multipliers:
+- **NPCs**: 1x speed, 20 unit explosion radius, 2x screen shake
+- **Vehicles**: 3x speed, 40 unit explosion radius, 3x screen shake, massive impact
+- **Buildings**: Impact only (cracks/deformation), 1.5x screen shake
 
 ## 📦 Próximos Pasos
 

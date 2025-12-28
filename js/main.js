@@ -17,7 +17,8 @@ import {
     getLowerPreset,
     getHigherPreset,
     SATIRICAL_TEXTS,
-    DOPAMINE_CONFIG
+    DOPAMINE_CONFIG,
+    GRAB_SYSTEM_CONFIG
 } from './config.js';
 
 import { createWorld } from './world.js';
@@ -43,6 +44,8 @@ import { createDustEmitterSystem } from './dust-emitter.js';
 import { GlobalTimeFreeze } from './time-freeze.js';
 import { createChaosMonitor } from './chaos-monitor.js';
 import { createDopaminePopupSystem } from './dopamine-popups.js';
+import { createGrabSystem } from './grab-system.js';
+import { createChargeParticleSystem, createImpactParticleSystem } from './grab-particles.js';
 
 // ============================================
 // GAME STATE
@@ -354,6 +357,11 @@ let DopaminePopupSystem = null;
 // Game Feel Overhaul Systems
 let ImpactFrameManager = null;
 let hitstopState;
+
+// Grab & Launch Entropy System
+let GrabSystem = null;
+let ChargeParticles = null;
+let ImpactParticles = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -735,6 +743,16 @@ function initThreeWorld() {
         postProcessing: PostProcessing,
     });
 
+    // Create Grab & Launch Entropy System
+    ChargeParticles = createChargeParticleSystem(World3D.scene, 500);
+    ImpactParticles = createImpactParticleSystem(World3D.scene, 1000);
+    GrabSystem = createGrabSystem(Player, World3D.camera, World3D.scene, GameState, {
+        npcSystem: NPCSystem,
+        chargeParticles: ChargeParticles,
+        impactParticles: ImpactParticles,
+        postProcessing: PostProcessing,
+    });
+
     // Set up death callback
     GameState.onDeath = (deathEvent) => {
         GameState.isReplaying = true;
@@ -962,6 +980,17 @@ function update(dt, rawDt = dt) {
     // Juice Sprint updates
     if (TrailsSystem && TrailsSystem.update) TrailsSystem.update(rawDt);
     if (DustEmitterSystem && DustEmitterSystem.update) DustEmitterSystem.update(rawDt);
+
+    // Grab & Launch Entropy System updates
+    if (GrabSystem) {
+        GrabSystem.update(finalDt);
+    }
+    if (ChargeParticles) {
+        ChargeParticles.update(rawDt);
+    }
+    if (ImpactParticles) {
+        ImpactParticles.update(rawDt);
+    }
 
     // Update debug stats
     if (DebugState.enabled) {
@@ -1292,11 +1321,11 @@ function setupInputHandlers() {
             }
         }
 
-        // Gravity Blast (G)
+        // Grab & Launch (G) - Note: Disabled Gravity Blast to use G for Grab
         if (e.code === 'KeyG' && !GameState.isPaused && !GameState.isReplaying && !GameState.playerControlsDisabled) {
             e.preventDefault();
-            if (AbilitySystem) {
-                AbilitySystem.activateGravityBlast();
+            if (GrabSystem && !GrabSystem.isGrabbing()) {
+                GrabSystem.startGrab();
             }
         }
 
@@ -1333,6 +1362,11 @@ function setupInputHandlers() {
 
     window.addEventListener('keyup', (e) => {
         Keys[e.code] = false;
+        
+        // Launch grabbed object on G release
+        if (e.code === 'KeyG' && GrabSystem && GrabSystem.isGrabbing()) {
+            GrabSystem.launch();
+        }
     });
 
     // Mouse events
