@@ -93,6 +93,115 @@ export function createNPCSystem(config = {}) {
         return null;
     }
 
+    const NPC_COLLISION_CONFIG = {
+        radius: 0.55,
+        heavyRadius: 0.85,
+        iterations: 2,
+        maxPushPerIteration: 0.25,
+    };
+
+    function getNPCRadius(npc) {
+        return npc?.state?.type === 'HEAVY' ? NPC_COLLISION_CONFIG.heavyRadius : NPC_COLLISION_CONFIG.radius;
+    }
+
+    function resolveNPCCollisions(dt, feedback) {
+        const npcs = state.active;
+        if (npcs.length < 2) return;
+
+        const threshold = GAME_CONFIG.COMBAT.COLLISION_SHAKE_THRESHOLD || 15.0;
+        const ragdollCollisionDamage = GAME_CONFIG.COMBAT.FURIA?.RAGDOLL_COLLISION_DAMAGE || 5;
+
+        for (let iter = 0; iter < NPC_COLLISION_CONFIG.iterations; iter++) {
+            for (let i = 0; i < npcs.length; i++) {
+                const a = npcs[i];
+                if (!a?.state?.active || a.state?.state === 'DEAD') continue;
+
+                for (let j = i + 1; j < npcs.length; j++) {
+                    const b = npcs[j];
+                    if (!b?.state?.active || b.state?.state === 'DEAD') continue;
+
+                    const ax = a.mesh.position.x;
+                    const az = a.mesh.position.z;
+                    const bx = b.mesh.position.x;
+                    const bz = b.mesh.position.z;
+
+                    let dx = bx - ax;
+                    let dz = bz - az;
+                    let distSq = dx * dx + dz * dz;
+
+                    const minDist = getNPCRadius(a) + getNPCRadius(b);
+                    const minDistSq = minDist * minDist;
+
+                    if (distSq < 1e-10) {
+                        const angle = Math.random() * Math.PI * 2;
+                        dx = Math.cos(angle) * 1e-4;
+                        dz = Math.sin(angle) * 1e-4;
+                        distSq = dx * dx + dz * dz;
+                    }
+
+                    if (distSq >= minDistSq) continue;
+
+                    const dist = Math.sqrt(distSq);
+                    const penetration = minDist - dist;
+
+                    const nx = dx / dist;
+                    const nz = dz / dist;
+
+                    const push = Math.min(NPC_COLLISION_CONFIG.maxPushPerIteration, penetration * 0.5);
+
+                    a.mesh.position.x -= nx * push;
+                    a.mesh.position.z -= nz * push;
+                    b.mesh.position.x += nx * push;
+                    b.mesh.position.z += nz * push;
+
+                    // Collision feedback + ragdoll collision damage (ported from npc.js)
+                    const aVel = a.state?.velocity;
+                    const bVel = b.state?.velocity;
+                    const relSpeed = aVel && bVel ? aVel.clone().sub(bVel).length() : 0;
+
+                    const aCd = a.state?.collisionShakeCooldown ?? 0;
+                    const bCd = b.state?.collisionShakeCooldown ?? 0;
+
+                    if (
+                        feedback?.applyHitstop &&
+                        feedback?.applyScreenShake &&
+                        aCd <= 0 &&
+                        bCd <= 0 &&
+                        relSpeed > threshold
+                    ) {
+                        const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
+                        feedback.applyHitstop(0.5 + 0.5 * impact);
+                        feedback.applyScreenShake(0.3 + 0.7 * impact, (GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION || 0.25) * 0.75);
+
+                        a.state.collisionShakeCooldown = 0.25;
+                        b.state.collisionShakeCooldown = 0.25;
+                    }
+
+                    if (a.state?.isRagdoll && ragdollCollisionDamage > 0) {
+                        b.takeDamage?.(ragdollCollisionDamage, a, relSpeed);
+                        b.state?.velocity?.add?.(new THREE.Vector3(nx, 0, nz).multiplyScalar(15.0));
+                    }
+
+                    if (b.state?.isRagdoll && ragdollCollisionDamage > 0) {
+                        a.takeDamage?.(ragdollCollisionDamage, b, relSpeed);
+                        a.state?.velocity?.add?.(new THREE.Vector3(-nx, 0, -nz).multiplyScalar(15.0));
+                    }
+                }
+            }
+        }
+
+        // Re-snap non-ragdoll NPCs to ground after resolution
+        if (typeof terrainHeightAt === 'function') {
+            for (const npc of npcs) {
+                if (!npc?.state?.active || npc.state?.state === 'DEAD') continue;
+                if (npc.state.isRagdoll || npc.state.isSuspended) continue;
+
+                const groundY = terrainHeightAt(npc.mesh.position.x, npc.mesh.position.z);
+                npc.mesh.position.y = groundY + 1.0;
+            }
+        }
+    }
+
     function update(dt, context = {}) {
         const { player = null, camera = null, feedback = null, decalSystem = null } = context;
 
@@ -129,6 +238,7 @@ export function createNPCSystem(config = {}) {
                     // But still update their basic status
                     npc.state.attackCooldown = Math.max(0, npc.state.attackCooldown - dt);
                     npc.state.timeToChangeDir = Math.max(0, npc.state.timeToChangeDir - dt);
+                    npc.state.collisionShakeCooldown = Math.max(0, npc.state.collisionShakeCooldown - dt);
                     continue;
                 }
             }
@@ -146,6 +256,9 @@ export function createNPCSystem(config = {}) {
                 dustEmitterSystem: state.dustEmitterSystem,
             });
         }
+
+        // Capsule-style NPC-vs-NPC resolution (prevents interpenetration)
+        resolveNPCCollisions(dt, feedback);
 
         // Auto-spawn new NPCs if population is low
         state.spawnTimer += dt;
