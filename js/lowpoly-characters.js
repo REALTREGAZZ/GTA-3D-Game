@@ -505,7 +505,7 @@ export function createLowPolyHumanoid(colorPreset = null, isPlayer = false) {
         leftArm: leftArmGroup,
         rightArm: rightArmGroup,
         leftLeg: leftLegGroup,
-        rightLeg: rightArmGroup,
+        rightLeg: rightLegGroup,
         helmet,
         materials: {
             body: bodyMaterial,
