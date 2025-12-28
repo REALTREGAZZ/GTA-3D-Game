@@ -28,11 +28,13 @@ export function applyToonMaterial(mesh, colorName, outlineScale = 1.08) {
     if (!mesh) return;
 
     const color = GRAPHICS_PRESETS.FLAT_COLORS[colorName] || 0xffffff;
-    
-    // Create toon material
+
+    // Create toon material with emissive support for panic/impact feedback
     const toonMaterial = new THREE.MeshToonMaterial({
         color: color,
         gradientMap: toonGradient,
+        emissive: 0x000000,
+        emissiveIntensity: 0.0,
     });
 
     mesh.material = toonMaterial;
@@ -46,7 +48,7 @@ export function applyToonMaterial(mesh, colorName, outlineScale = 1.08) {
     const outlineMesh = new THREE.Mesh(mesh.geometry, outlineMaterial);
     outlineMesh.scale.set(outlineScale, outlineScale, outlineScale);
     mesh.add(outlineMesh);
-    
+
     return toonMaterial;
 }
 

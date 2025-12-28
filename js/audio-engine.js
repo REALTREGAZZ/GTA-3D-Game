@@ -20,6 +20,16 @@ class AudioEngine {
         this.listenerPosition = new THREE.Vector3();
         this.enabled = true;
         this.initialized = false;
+
+        // Audio Ducking System
+        this.masterGain = null;
+        this.lowPassFilter = null;
+        this.duckingActive = false;
+        this.duckingRestoreTime = 0;
+        this.normalCutoff = 20000;
+        this.duckedCutoff = 2000;
+        this.normalVolume = 0.7;
+        this.duckedVolume = 0.25; // -6dB relative to 0.7
     }
 
     /**
@@ -28,14 +38,90 @@ class AudioEngine {
      */
     init() {
         if (this.initialized) return;
-        
+
         try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create master gain node for ducking
+            this.masterGain = this.audioContext.createGain();
+            this.masterGain.gain.value = this.normalVolume;
+
+            // Create low-pass filter for ducking
+            this.lowPassFilter = this.audioContext.createBiquadFilter();
+            this.lowPassFilter.type = 'lowpass';
+            this.lowPassFilter.frequency.value = this.normalCutoff;
+            this.lowPassFilter.Q.value = 1.0;
+
+            // Connect chain: masterGain -> lowPassFilter -> destination
+            this.masterGain.connect(this.lowPassFilter);
+            this.lowPassFilter.connect(this.audioContext.destination);
+
             this.initialized = true;
-            console.log('AudioEngine initialized');
+            console.log('AudioEngine initialized with ducking system');
         } catch (error) {
             console.error('Failed to initialize AudioContext:', error);
             this.enabled = false;
+        }
+    }
+
+    /**
+     * Trigger audio ducking for impact frames
+     * Uses linearRampToValueAtTime for smooth transitions
+     * @param {number} duration - Duration of ducking in seconds (typically 0.1s for impact frame cycle)
+     */
+    triggerDucking(duration = 0.1) {
+        if (!this.audioContext || !this.masterGain || !this.lowPassFilter) return;
+
+        const now = this.audioContext.currentTime;
+        const rampDuration = 0.015; // 15ms transition for smooth ducking
+
+        try {
+            // Smoothly reduce low-pass cutoff from 20000Hz to 2000Hz
+            this.lowPassFilter.frequency.cancelScheduledValues(now);
+            this.lowPassFilter.frequency.setValueAtTime(this.lowPassFilter.frequency.value, now);
+            this.lowPassFilter.frequency.linearRampToValueAtTime(this.duckedCutoff, now + rampDuration);
+
+            // Smoothly reduce master volume from normal to -6dB
+            this.masterGain.gain.cancelScheduledValues(now);
+            this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+            this.masterGain.gain.linearRampToValueAtTime(this.duckedVolume, now + rampDuration);
+
+            this.duckingActive = true;
+            this.duckingRestoreTime = now + duration;
+
+            console.log(`[AudioDucking] Triggered - Filter: ${this.duckedCutoff}Hz, Volume: ${this.duckedVolume}dB`);
+        } catch (error) {
+            console.error('[AudioDucking] Error triggering ducking:', error);
+        }
+    }
+
+    /**
+     * Update ducking restoration
+     * @param {number} currentTime - Current audio context time
+     */
+    updateDucking() {
+        if (!this.duckingActive || !this.audioContext) return;
+
+        const now = this.audioContext.currentTime;
+        const rampDuration = 0.02; // 20ms smooth restoration
+
+        if (now >= this.duckingRestoreTime) {
+            try {
+                // Smoothly restore low-pass cutoff to 20000Hz
+                this.lowPassFilter.frequency.cancelScheduledValues(now);
+                this.lowPassFilter.frequency.setValueAtTime(this.lowPassFilter.frequency.value, now);
+                this.lowPassFilter.frequency.linearRampToValueAtTime(this.normalCutoff, now + rampDuration);
+
+                // Smoothly restore master volume
+                this.masterGain.gain.cancelScheduledValues(now);
+                this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+                this.masterGain.gain.linearRampToValueAtTime(this.normalVolume, now + rampDuration);
+
+                this.duckingActive = false;
+                console.log('[AudioDucking] Restored - Filter: 20000Hz, Volume: 0.7dB');
+            } catch (error) {
+                console.error('[AudioDucking] Error restoring ducking:', error);
+            }
         }
     }
 
@@ -160,15 +246,25 @@ class AudioEngine {
 
         // Create gain node for volume control
         const gainNode = ctx.createGain();
-        
+
         // Create stereo panner for spatial positioning
         const pannerNode = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+
+        // Connect to master gain (for ducking support)
         if (pannerNode) {
             pannerNode.pan.value = spatial.pan;
             gainNode.connect(pannerNode);
-            pannerNode.connect(ctx.destination);
+            if (this.masterGain) {
+                pannerNode.connect(this.masterGain);
+            } else {
+                pannerNode.connect(ctx.destination);
+            }
         } else {
-            gainNode.connect(ctx.destination);
+            if (this.masterGain) {
+                gainNode.connect(this.masterGain);
+            } else {
+                gainNode.connect(ctx.destination);
+            }
         }
 
         // Generate sound based on type

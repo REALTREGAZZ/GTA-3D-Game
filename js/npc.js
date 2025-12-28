@@ -125,6 +125,13 @@ export function createNPC(position = new THREE.Vector3()) {
         isDizzy: false,
         dizzyTimer: 0,
         dizzyDuration: 1.5,
+
+        // Panic System (Game Feel Overhaul)
+        isPanic: false,
+        panicTimer: 0,
+        panicDuration: 3.0,
+        consecutiveHits: 0,
+        lastHitComboCount: 0,
     };
 
     const BASIC_MAX_HEALTH = 60;
@@ -228,6 +235,13 @@ export function createNPC(position = new THREE.Vector3()) {
         state.isDizzy = false;
         state.dizzyTimer = 0;
 
+        // Panic System reset
+        state.isPanic = false;
+        state.panicTimer = 0;
+        state.consecutiveHits = 0;
+        state.lastHitComboCount = 0;
+        head.material.emissiveIntensity = 0;
+
         // Reset mesh scales
         body.scale.set(1, 1, 1);
         head.scale.set(1, 1, 1);
@@ -299,14 +313,51 @@ export function createNPC(position = new THREE.Vector3()) {
         state.suspendedVelocity.set(0, 0, 0);
     }
 
-    function takeDamage(amount, source = null, impulse = 0, isMelee = false) {
+    function takeDamage(amount, source = null, impulse = 0, isMelee = false, options = {}) {
         if (state.state === NPC_STATES.DEAD) return;
 
         state.health -= amount;
         state.lastDamageTime = 0;
         state.lastDamagedBy = source;
 
+        const { comboCount = 0 } = options;
+
+        // Visual validation: Flash white on damage
         setVisualColor(new THREE.Color(0xffffff));
+
+        // PANIC SYSTEM: Glowing eyes before attack, panic after 3 consecutive hits
+        // Make eyes glow with emissive material (intense warning)
+        head.material.emissive.setHex(0xffffff);
+        head.material.emissiveIntensity = 2.0;
+
+        // Track consecutive hits for panic activation
+        if (comboCount > 0 && comboCount >= state.lastHitComboCount) {
+            state.consecutiveHits++;
+        } else {
+            state.consecutiveHits = 1;
+        }
+        state.lastHitComboCount = comboCount;
+
+        // Panic Mode: If player lands 3+ hits without escape, enter FLEE urgency
+        if (state.consecutiveHits >= 3 && !state.isPanic) {
+            state.isPanic = true;
+            state.panicTimer = state.panicDuration;
+            state.state = NPC_STATES.FLEE;
+
+            // Visual panic feedback
+            setVisualColor(new THREE.Color(0xffaa00)); // Orange panic color
+            indicator.material.color.setHex(0xff0000); // Red indicator
+
+            console.log(`[NPC Panic] ${state.id} entering panic mode after ${state.consecutiveHits} consecutive hits`);
+        }
+
+        // Immediate knockback easing (visual validation)
+        if (impulse > 0 && typeof impulse === 'number') {
+            // Apply scale squash on impact direction
+            const squashIntensity = Math.min(0.3, impulse / 50.0);
+            body.scale.set(1 - squashIntensity, 1 + squashIntensity, 1 - squashIntensity);
+            state.squashTimer = 0.2; // Recover squash over 0.2s
+        }
 
         // Dizzy State: Heavy NPCs become Dizzy after 3 melee punches
         if (state.type === 'HEAVY' && isMelee && amount > 0) {
@@ -639,11 +690,46 @@ export function createNPC(position = new THREE.Vector3()) {
             }
         }
 
+        // Panic System update timer
+        if (state.isPanic) {
+            state.panicTimer -= dt;
+            if (state.panicTimer <= 0) {
+                state.isPanic = false;
+                state.consecutiveHits = 0;
+                setVisualColor(state.baseColor);
+                console.log(`[NPC Panic] ${state.id} exiting panic mode`);
+            }
+        }
+
         // Visual hit flash decay
         if (state.lastDamageTime > 0.08) {
             setVisualColor(state.baseColor);
             indicator.material.emissiveIntensity = 0.25;
             indicator.visible = state.state !== NPC_STATES.DEAD;
+        }
+
+        // Decrement eye glow after damage
+        if (head.material.emissiveIntensity > 0) {
+            head.material.emissiveIntensity = Math.max(0, head.material.emissiveIntensity - dt * 10);
+        }
+
+        // Update squash & stretch recovery (knockback easing)
+        if (state.squashTimer > 0) {
+            state.squashTimer -= dt;
+
+            // Smooth recovery from squashed to normal scale
+            const recoveryProgress = 1.0 - (state.squashTimer / 0.2);
+            const scaleXZ = (1.0 - 0.3) + (0.3 * recoveryProgress);
+            const scaleY = (1.0 + 0.3) - (0.3 * recoveryProgress);
+
+            body.scale.set(scaleXZ, scaleY, scaleXZ);
+            head.scale.set(scaleXZ * 0.9, scaleY * 0.9, scaleXZ * 0.9);
+            heavyCube.scale.set(scaleXZ, scaleY, scaleXZ);
+        } else {
+            // Ensure normal scale
+            body.scale.set(1, 1, 1);
+            head.scale.set(1, 1, 1);
+            heavyCube.scale.set(1, 1, 1);
         }
 
         if (state.state === NPC_STATES.DEAD) {
@@ -772,15 +858,21 @@ export function createNPC(position = new THREE.Vector3()) {
         }
 
         if (state.state === NPC_STATES.FLEE) {
+            // Panic urgency: faster flee speed when in panic mode
+            const fleeSpeed = state.isPanic ? 10.0 : 7.5;
+
             const awayFrom = playerPos ? group.position.clone().sub(playerPos).setY(0) : pickRandomXZDirection();
             if (awayFrom.lengthSq() > 0.001) {
                 awayFrom.normalize();
-                state.velocity.add(awayFrom.multiplyScalar(7.5 * dt));
-                // Extra erratic wiggle
-                state.velocity.add(pickRandomXZDirection().multiplyScalar(2.0 * dt));
+                state.velocity.add(awayFrom.multiplyScalar(fleeSpeed * dt));
+                // Extra erratic wiggle - more intense when panicked
+                const wiggleIntensity = state.isPanic ? 4.0 : 2.0;
+                state.velocity.add(pickRandomXZDirection().multiplyScalar(wiggleIntensity * dt));
             }
 
-            if (distToPlayer > fleePlayerRadius * 1.3) {
+            // Panic urgency: flee further before giving up
+            const safeDistance = state.isPanic ? fleePlayerRadius * 2.0 : fleePlayerRadius * 1.3;
+            if (distToPlayer > safeDistance) {
                 state.targetPlayer = null;
                 state.state = state.targetNPC ? NPC_STATES.CHASE : NPC_STATES.WANDER;
             }
@@ -899,34 +991,6 @@ export function createNPC(position = new THREE.Vector3()) {
 
                 group.position.add(delta.normalize().multiplyScalar((0.9 - d) * 0.5));
             }
-        }
-
-        // Update squash & stretch (visual deformation)
-        if (state.squashTimer > 0) {
-            state.squashTimer -= dt;
-            const progress = state.squashTimer / JUICE_SPRINT_CONFIG.SQUASH_STRETCH.DURATION;
-
-            // Interpolate scale from squashed to normal
-            const squashScale = JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_SQUASH_SCALE_Y +
-                (1.0 - JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_SQUASH_SCALE_Y) * (1 - progress);
-            const stretchScale = JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_STRETCH_SCALE_XZ +
-                (1.0 - JUICE_SPRINT_CONFIG.SQUASH_STRETCH.MAX_STRETCH_SCALE_XZ) * (1 - progress);
-
-            // Apply to meshes
-            body.scale.y = squashScale;
-            body.scale.x = stretchScale;
-            body.scale.z = stretchScale;
-            head.scale.y = squashScale * 0.9;
-            head.scale.z = stretchScale * 0.9;
-            head.scale.x = stretchScale * 0.9;
-            heavyCube.scale.y = squashScale;
-            heavyCube.scale.x = stretchScale;
-            heavyCube.scale.z = stretchScale;
-        } else {
-            // Reset to normal scale
-            body.scale.set(1, 1, 1);
-            head.scale.set(1, 1, 1);
-            heavyCube.scale.set(1, 1, 1);
         }
     }
 
