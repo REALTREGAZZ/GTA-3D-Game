@@ -29,6 +29,12 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     const rightLeg = humanoid.rightLeg;
     const materials = humanoid.materials;
 
+    // Create feet group for animation system (wraps both legs)
+    const feet = new THREE.Group();
+    feet.add(leftLeg);
+    feet.add(rightLeg);
+    group.add(feet);
+
     // Direction indicator
     const indicatorGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.4);
     const indicatorMaterial = new THREE.MeshToonMaterial({
@@ -402,6 +408,7 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         rightArm,
         leftLeg,
         rightLeg,
+        feet,
         indicator,
         state,
         update,
