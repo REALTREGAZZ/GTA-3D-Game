@@ -80,7 +80,8 @@ function createNeonGridTexture({
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = 16;
+    // Keep anisotropy modest for performance.
+    texture.anisotropy = 8;
     return texture;
 }
 
@@ -129,8 +130,17 @@ export function createTerrain({
     mesh.name = 'Terrain';
     mesh.receiveShadow = true;
 
+    // Fast analytical height sampling (avoids per-frame raycasts).
+    // World space: after rotateX(-PI/2), original plane Y becomes -world Z.
+    function getHeightAt(x, z) {
+        const hills = Math.sin(x * 0.02) * Math.cos(z * 0.02);
+        const ripples = Math.sin(x * 0.08) * 0.15 + Math.cos(z * 0.07) * 0.15;
+        return (hills + ripples) * heightScale;
+    }
+
     return {
         mesh,
         size,
+        getHeightAt,
     };
 }

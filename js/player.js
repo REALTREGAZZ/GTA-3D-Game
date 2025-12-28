@@ -7,13 +7,14 @@ import * as THREE from 'three';
 import { GAME_CONFIG, PHYSICS_CONFIG, GRAPHICS_PRESETS } from './config.js';
 import { applyToonMaterial } from './world.js';
 import { createLowPolyHumanoid, createPlayerCloth, EMOTIONS } from './lowpoly-characters.js';
+import { createCapsuleCollider, resolveCapsuleCollisions, snapToGroundY } from './collision-system.js';
 
 export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     // Create low-poly humanoid for player (with unique appearance)
     const playerColorPreset = {
-        torso: 0xffffff,
-        arms: 0xffffff,
-        legs: 0x333333,
+        torso: 0x444444,
+        arms: 0x555555,
+        legs: 0x222222,
     };
     const humanoid = createLowPolyHumanoid(playerColorPreset, true); // true = isPlayer
     const group = humanoid.group;
@@ -67,9 +68,17 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         isMoving: false,
         isRunning: false,
         isSprinting: false,
+        isRolling: false,
+        invulnerable: false,
         currentSpeed: 0,
         targetSpeed: 0,
         jumpCooldown: 0,
+        rollTimer: 0,
+        rollCooldown: 0,
+        rollIFrameTimer: 0,
+        rollDirection: new THREE.Vector3(0, 0, 1),
+        stamina: GAME_CONFIG.PLAYER.MAX_STAMINA,
+        _prevRollKeyDown: false,
 
         // Combat state
         flashTime: 0,
@@ -78,15 +87,32 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         ragdollTime: 0,
         ragdollSpin: 0,
 
-        // Health
+        // Health (visual-only; actual gameplay health lives in GameState)
         health: GAME_CONFIG.PLAYER.MAX_HEALTH,
         lastDamageTime: 0,
     };
 
+    // Proper capsule collider (feet-origin character)
+    const capsule = createCapsuleCollider({
+        radius: 0.4,
+        height: 1.8,
+        offset: new THREE.Vector3(0, 0, 0),
+    });
+    const FOOT_OFFSET = 0.05;
+
+    const ROLL_DURATION = 0.35;
+    const ROLL_IFRAMES = 0.22;
+    const ROLL_COOLDOWN = 0.5;
+    const ROLL_SPEED = 14.0;
+
     // Player movement
     const moveDirection = new THREE.Vector3();
+    const _movement = new THREE.Vector3();
+    const _facing = new THREE.Vector3();
+    const _capBottom = new THREE.Vector3();
+    const _capTop = new THREE.Vector3();
 
-    function update(deltaTime, inputKeys, colliders = [], groundY = 0, cameraAngle = 0) {
+    function update(deltaTime, inputKeys, colliders = [], terrainHeightAt = 0, cameraAngle = 0) {
         // If dead and in ragdoll mode
         if (state.isDead) {
             updateRagdoll(deltaTime);
@@ -115,6 +141,19 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         if (state.recoil > 0) {
             state.recoil -= deltaTime * 5;
             if (state.recoil < 0) state.recoil = 0;
+        }
+
+        const getGroundY = typeof terrainHeightAt === 'function'
+            ? terrainHeightAt
+            : () => terrainHeightAt;
+
+        // Roll timers / i-frames
+        state.rollCooldown = Math.max(0, state.rollCooldown - deltaTime);
+        state.rollTimer = Math.max(0, state.rollTimer - deltaTime);
+        state.rollIFrameTimer = Math.max(0, state.rollIFrameTimer - deltaTime);
+        state.invulnerable = state.rollIFrameTimer > 0;
+        if (state.isRolling && state.rollTimer <= 0) {
+            state.isRolling = false;
         }
 
         // Reset movement flags
@@ -152,8 +191,13 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
             moveDirection.normalize();
             state.isMoving = true;
 
-            // Determine speed based on input
-            if (inputKeys.ShiftLeft || inputKeys.ShiftRight) {
+            const wantsRun = inputKeys.ShiftLeft || inputKeys.ShiftRight;
+            const wantsSprint = wantsRun && (inputKeys.ControlLeft || inputKeys.ControlRight);
+
+            if (wantsSprint && state.stamina > 0.5) {
+                state.isSprinting = true;
+                state.targetSpeed = GAME_CONFIG.PLAYER.SPRINT_SPEED;
+            } else if (wantsRun) {
                 state.isRunning = true;
                 state.targetSpeed = GAME_CONFIG.PLAYER.RUN_SPEED;
             } else {
@@ -178,6 +222,14 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
             );
         }
 
+        // Stamina
+        const maxStamina = GAME_CONFIG.PLAYER.MAX_STAMINA;
+        if (state.isSprinting && state.isMoving) {
+            state.stamina = Math.max(0, state.stamina - GAME_CONFIG.PLAYER.STAMINA_DRAIN_RATE * deltaTime);
+        } else {
+            state.stamina = Math.min(maxStamina, state.stamina + GAME_CONFIG.PLAYER.STAMINA_REGEN_RATE * deltaTime);
+        }
+
         // Rotate player to face movement direction
         if (state.isMoving && moveDirection.lengthSq() > 0) {
             const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
@@ -195,28 +247,44 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
             group.rotation.y = state.rotation;
         }
 
-        // Apply movement (in world space)
-        if (state.currentSpeed > 0) {
-            const movement = moveDirection.clone().multiplyScalar(state.currentSpeed * deltaTime);
+        const rollKeyDown = !!inputKeys.KeyQ;
+        const rollPressed = rollKeyDown && !state._prevRollKeyDown;
+        state._prevRollKeyDown = rollKeyDown;
 
-            // Check collision before moving
-            const newPosition = group.position.clone().add(movement);
-            if (!checkCollision(newPosition, colliders)) {
-                group.position.copy(newPosition);
+        if (
+            rollPressed &&
+            state.isGrounded &&
+            !state.isRolling &&
+            state.rollCooldown <= 0 &&
+            state.stamina >= GAME_CONFIG.PLAYER.SPRINT_STAMINA_COST
+        ) {
+            state.isRolling = true;
+            state.rollTimer = ROLL_DURATION;
+            state.rollIFrameTimer = ROLL_IFRAMES;
+            state.rollCooldown = ROLL_COOLDOWN;
+            state.stamina = Math.max(0, state.stamina - GAME_CONFIG.PLAYER.SPRINT_STAMINA_COST);
+
+            if (state.isMoving) {
+                state.rollDirection.copy(moveDirection);
             } else {
-                // Try sliding along walls
-                const slideX = new THREE.Vector3(movement.x, 0, 0);
-                const testPosX = group.position.clone().add(slideX);
-                if (!checkCollision(testPosX, colliders)) {
-                    group.position.copy(testPosX);
-                }
-
-                const slideZ = new THREE.Vector3(0, 0, movement.z);
-                const testPosZ = group.position.clone().add(slideZ);
-                if (!checkCollision(testPosZ, colliders)) {
-                    group.position.copy(testPosZ);
-                }
+                _facing.set(Math.sin(state.rotation), 0, Math.cos(state.rotation));
+                if (_facing.lengthSq() < 1e-6) _facing.set(0, 0, 1);
+                _facing.normalize();
+                state.rollDirection.copy(_facing);
             }
+        }
+
+        // Apply movement (in world space)
+        _movement.set(0, 0, 0);
+        if (state.isRolling) {
+            _movement.copy(state.rollDirection).multiplyScalar(ROLL_SPEED * deltaTime);
+        } else if (state.currentSpeed > 0) {
+            _movement.copy(moveDirection).multiplyScalar(state.currentSpeed * deltaTime);
+        }
+
+        if (_movement.lengthSq() > 0) {
+            group.position.add(_movement);
+            resolveCapsuleCollisions(group.position, capsule, colliders, { iterations: 2 });
         }
 
         // Apply gravity
@@ -242,9 +310,11 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         group.position.y += state.velocity.y * deltaTime;
 
         // Ground check (terrain height)
-        const groundLevel = groundY;
-        if (group.position.y <= groundLevel) {
-            group.position.y = groundLevel;
+        const groundLevel = getGroundY(group.position.x, group.position.z);
+        const targetY = groundLevel + FOOT_OFFSET;
+
+        if (group.position.y <= targetY) {
+            group.position.y = targetY;
             state.isGrounded = true;
             state.velocity.y = 0;
         } else {
@@ -253,7 +323,10 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
 
         // If grounded, keep glued to the terrain when walking over small height changes
         if (state.isGrounded) {
-            group.position.y = groundLevel;
+            group.position.y = snapToGroundY(group.position.y, groundLevel, {
+                footOffset: FOOT_OFFSET,
+                dt: deltaTime,
+            });
         }
 
         // Keep player within terrain bounds
@@ -303,15 +376,17 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     function checkCollision(position, colliders) {
         if (!colliders || colliders.length === 0) return false;
 
-        const playerRadius = GAME_CONFIG.PLAYER.RADIUS * 1.2; // Slightly larger for safety
-        const playerCenter = position.clone();
-        playerCenter.y += GAME_CONFIG.PLAYER.HEIGHT / 2;
+        _capBottom.copy(position).add(capsule.offset);
+        _capTop.copy(_capBottom);
+        _capBottom.y += capsule.radius;
+        _capTop.y += capsule.height - capsule.radius;
 
         for (const collider of colliders) {
-            const distance = collider.box.distanceToPoint(playerCenter);
-            if (distance <= playerRadius) {
-                return true;
-            }
+            const box = collider?.box;
+            if (!box) continue;
+
+            if (box.distanceToPoint(_capBottom) <= capsule.radius) return true;
+            if (box.distanceToPoint(_capTop) <= capsule.radius) return true;
         }
 
         return false;
@@ -337,6 +412,7 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     }
 
     function takeDamage(amount, direction) {
+        if (state.invulnerable) return;
         state.health -= amount;
         state.lastDamageTime = 0;
 
@@ -381,6 +457,12 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         state.recoil = 0;
         state.velocity.set(0, 0, 0);
         state.isGrounded = true;
+        state.stamina = GAME_CONFIG.PLAYER.MAX_STAMINA;
+        state.isRolling = false;
+        state.invulnerable = false;
+        state.rollTimer = 0;
+        state.rollCooldown = 0;
+        state.rollIFrameTimer = 0;
 
         // Restore materials
         materials.body = originalBodyMaterial;
@@ -414,6 +496,7 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
         feet,
         indicator,
         state,
+        get colliders() { return group.userData.colliders || []; },
         update,
         getPosition,
         getRotation,

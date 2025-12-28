@@ -25,7 +25,6 @@ import { createWorld } from './world.js';
 import { createTerrain } from './terrain.js';
 import { createBuildings } from './buildings.js';
 import { createSky } from './sky.js';
-import { createPlayer } from './player.js';
 import { createThirdPersonCamera } from './camera.js';
 import { createAnimationController } from './animations.js';
 import { createCombatSystem } from './combat-system.js';
@@ -46,6 +45,12 @@ import { createChaosMonitor } from './chaos-monitor.js';
 import { createDopaminePopupSystem } from './dopamine-popups.js';
 import { createGrabSystem } from './grab-system.js';
 import { createChargeParticleSystem, createImpactParticleSystem } from './grab-particles.js';
+
+import { createPerformanceManager } from './performance-manager.js';
+import { createDarkSoulsWorldBuilder } from './dark-souls-world-builder.js';
+import { createUISystem } from './ui-system.js';
+import { createSaveSystem } from './save-system.js';
+import { createPlayerControllerV2 } from './player-controller-v2.js';
 
 // ============================================
 // GAME STATE
@@ -328,6 +333,7 @@ window.triggerImpactFrame = triggerImpactFrame;
 let World3D = null;
 let Terrain = null;
 let Buildings = null;
+let WorldObstacles = null;
 let Sky = null;
 let Player = null;
 let PlayerCamera = null;
@@ -349,6 +355,12 @@ let PostProcessing = null;
 let TrailsSystem = null;
 let DustEmitterSystem = null;
 let PerformanceMonitor = null;
+
+// World/Perf helpers
+let PerformanceManager = null;
+let DarkSoulsWorld = null;
+let UISystem = null;
+let SaveSystem = null;
 
 // Viral Factory Systems
 let ChaosMonitor = null;
@@ -569,6 +581,13 @@ function initThreeWorld() {
 
     World3D = createWorld({ canvas: UI.canvas, autoResize: true });
 
+    PerformanceManager = createPerformanceManager({
+        renderer: World3D.renderer,
+        sunLight: World3D.lights.sunLight,
+        targetFps: GAME_CONFIG.FPS,
+        shadowFrustumSize: GraphicsState.currentPreset?.shadowFrustumSize || 90,
+    });
+
     Terrain = createTerrain({ size: 600 });
     World3D.scene.add(Terrain.mesh);
 
@@ -578,15 +597,43 @@ function initThreeWorld() {
     });
     World3D.scene.add(Buildings.group);
 
+    // Unified collider list for player/NPCs (updated each frame).
+    WorldObstacles = { colliders: [] };
+
+    DarkSoulsWorld = createDarkSoulsWorldBuilder({
+        scene: World3D.scene,
+        terrainHeightAt: getTerrainHeightAt,
+        mapSize: Terrain.size,
+        chunkSize: 100,
+        viewDistance: 240,
+    });
+    World3D.scene.add(DarkSoulsWorld.root);
+
     Sky = createSky({
         scene: World3D.scene,
         sunLight: World3D.lights.sunLight,
         ambientLight: World3D.lights.ambientLight,
     });
 
+    SaveSystem = createSaveSystem();
+
     // Create player
-    Player = createPlayer({ position: new THREE.Vector3(0, 5, 0) });
+    Player = createPlayerControllerV2({ position: new THREE.Vector3(0, 5, 0) });
     World3D.scene.add(Player.mesh);
+
+    // Load save if present
+    const saveData = SaveSystem.load();
+    if (saveData) {
+        SaveSystem.applyLoaded(saveData, { player: Player, gameState: GameState });
+    }
+
+    UISystem = createUISystem({
+        ui: UI,
+        player: Player,
+        gameState: GameState,
+        terrainSize: Terrain.size,
+        world: DarkSoulsWorld,
+    });
 
     // Create animation controller
     AnimationController = createAnimationController(Player);
@@ -605,7 +652,7 @@ function initThreeWorld() {
         attackPlayerRadius: 2.2,
         fleePlayerRadius: 4.0,
         mapSize: Terrain.size,
-        buildings: Buildings,
+        buildings: WorldObstacles,
         terrainHeightAt: getTerrainHeightAt,
     });
 
@@ -819,6 +866,12 @@ const GroundRayOrigin = new THREE.Vector3();
 const GroundRayDirection = new THREE.Vector3(0, -1, 0);
 
 function getTerrainHeightAt(x, z) {
+    // Prefer analytic sampling (much faster) if terrain provides it.
+    if (typeof Terrain?.getHeightAt === 'function') {
+        return Terrain.getHeightAt(x, z);
+    }
+
+    // Fallback: raycast against the terrain mesh.
     if (!Terrain?.mesh) return 0;
 
     GroundRayOrigin.set(x, 200, z);
@@ -900,13 +953,35 @@ function update(dt, rawDt = dt) {
     const timeScaleFinal = GameState.timeScale * GlobalTimeFreeze.factor;
     const finalDt = rawDt * timeScaleFinal;
 
+    // Update world streaming (unscaled so chunk pop-in doesn't stutter during hitstop)
+    if (DarkSoulsWorld && Player) {
+        DarkSoulsWorld.update(Player.getPosition());
+    }
+
     // Update player (scaled)
     if (Player && Buildings && PlayerCamera && !GameState.playerControlsDisabled) {
-        // Get terrain height at player position
-        const playerPos = Player.getPosition();
-        const groundHeight = getTerrainHeightAt(playerPos.x, playerPos.z);
-        Player.setColliders(Buildings.colliders);
-        Player.update(finalDt, Keys, Buildings.colliders, groundHeight, PlayerCamera.state.horizontalAngle);
+        const staticColliders = Buildings.colliders || [];
+        const streamedColliders = DarkSoulsWorld?.getColliders?.() || [];
+        const allColliders = staticColliders.concat(streamedColliders);
+
+        if (WorldObstacles) {
+            WorldObstacles.colliders = allColliders;
+        }
+
+        Player.setColliders(allColliders);
+        Player.update(finalDt, Keys, allColliders, getTerrainHeightAt, PlayerCamera.state.horizontalAngle);
+
+        // Sync stamina for UI/save.
+        if (Player?.state && typeof Player.state.stamina === 'number') {
+            GameState.player.stamina = Player.state.stamina;
+        }
+
+        // Environmental hazard: lava zone chip damage.
+        const lavaT = DarkSoulsWorld?.getLavaDamageAt?.(Player.mesh.position.x, Player.mesh.position.z) || 0;
+        if (lavaT > 0.25 && CombatSystem) {
+            const dps = 8 + lavaT * 12;
+            CombatSystem.applyDamage(dps * rawDt, new THREE.Vector3(0, 1, 0), 'ENV');
+        }
     }
 
     // Update animations (scaled)
@@ -1127,6 +1202,8 @@ function updateHUD() {
     } else {
         UI.hud.targetDistance.style.display = 'none';
     }
+
+    UISystem?.update?.();
 }
 
 // ============================================
@@ -1187,6 +1264,12 @@ function updateFpsCounter(deltaTime) {
     if (PerformanceMonitor) {
         PerformanceMonitor.update(Math.round(avgFps));
     }
+
+    // Dynamic resolution + shadow focus
+    PerformanceManager?.update?.({
+        fps: Math.round(avgFps),
+        focusPosition: Player?.getPosition?.() || null,
+    });
 
     // Update FPS counter display (try both fpsValue and fpsCounter elements)
     const fpsElement = UI.settings.fpsValue || UI.settings.fpsCounter || document.getElementById('fpsValue') || document.getElementById('fpsCounter');
@@ -1469,11 +1552,24 @@ function setupPauseMenuHandlers() {
     });
     
     document.getElementById('saveBtn').addEventListener('click', () => {
-        console.log('Save game not implemented yet');
+        if (!SaveSystem) return;
+        SaveSystem.save({
+            player: Player,
+            gameState: GameState,
+            graphicsPresetName: GraphicsState.currentPreset?.name || null,
+        });
+        OverlaySystem.show('PARTIDA GUARDADA', 1.4);
     });
     
     document.getElementById('loadBtn').addEventListener('click', () => {
-        console.log('Load game not implemented yet');
+        if (!SaveSystem) return;
+        const data = SaveSystem.load();
+        if (data) {
+            SaveSystem.applyLoaded(data, { player: Player, gameState: GameState });
+            OverlaySystem.show('PARTIDA CARGADA', 1.4);
+        } else {
+            OverlaySystem.show('NO HAY SAVE', 1.2);
+        }
     });
     
     document.getElementById('exitBtn').addEventListener('click', () => {
