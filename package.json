@@ -23,7 +23,8 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
-    "three": "^0.160.0"
+    "three": "^0.160.0",
+    "@dimforge/rapier3d-compat": "^0.12.0"
   },
   "engines": {
     "node": ">=16.0.0"

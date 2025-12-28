@@ -9,7 +9,6 @@ import {
     GAME_CONFIG,
     DEBUG_CONFIG,
     GRAPHICS_PRESETS,
-    WAVE_SYSTEM_CONFIG,
     JUICE_SPRINT_CONFIG,
     getActivePreset,
     saveGraphicsPreset,
@@ -22,32 +21,32 @@ import {
 } from './config.js';
 
 import { createWorld } from './world.js';
-import { createTerrain } from './terrain.js';
-import { createBuildings } from './buildings.js';
 import { createSky } from './sky.js';
 import { createThirdPersonCamera } from './camera.js';
 import { createAnimationController } from './animations.js';
 import { createCombatSystem } from './combat-system.js';
 import { createReplaySystem } from './replay-system.js';
-import { createNPCSystem } from './npc-system.js';
 import { createChaosCamera } from './chaos-camera.js';
 import { createAbilitySystem } from './abilities.js';
 import { audioEngine } from './audio-engine.js';
 
-import { createChaosScoreSystem } from './chaos-score.js';
-import { createWaveSystem } from './wave-system.js';
+import { TerrainImporter } from './terrain-importer.js';
+import { PhysicsSystem } from './physics-system.js';
+import { ZoneManager } from './world-zones.js';
+import { DialogueSystem } from './dialogue-system.js';
+import { Malakor } from './boss-malakor.js';
+import { Sylphira } from './boss-sylphira.js';
+import { VoidEater } from './boss-void-eater.js';
+
 import { createDecalSystem } from './decal-system.js';
 import { createPostProcessingEffects } from './post-processing.js';
 import { createTrailsSystem } from './trails-system.js';
 import { createDustEmitterSystem } from './dust-emitter.js';
 import { GlobalTimeFreeze } from './time-freeze.js';
-import { createChaosMonitor } from './chaos-monitor.js';
-import { createDopaminePopupSystem } from './dopamine-popups.js';
 import { createGrabSystem } from './grab-system.js';
 import { createChargeParticleSystem, createImpactParticleSystem } from './grab-particles.js';
 
 import { createPerformanceManager } from './performance-manager.js';
-import { createDarkSoulsWorldBuilder } from './dark-souls-world-builder.js';
 import { createUISystem } from './ui-system.js';
 import { createSaveSystem } from './save-system.js';
 import { createPlayerControllerV2 } from './player-controller-v2.js';
@@ -354,6 +353,13 @@ let NPCPlayerProxy = null;
 let ChaosCamera = null;
 let AbilitySystem = null;
 
+// Boss Encounter Systems
+let TerrainImporterSystem = null;
+let Physics = null;
+let ZoneManagerSystem = null;
+let Dialogue = null;
+let Bosses = [];
+
 // Dopamine Engine Systems
 let ChaosScoreSystem = null;
 let WaveSystem = null;
@@ -606,26 +612,23 @@ function initThreeWorld() {
         shadowFrustumSize: GraphicsState.currentPreset?.shadowFrustumSize || 90,
     });
 
-    Terrain = createTerrain({ size: 600 });
+    // Terrain is now imported (GLTF/GLB) instead of procedural generation.
+    TerrainImporterSystem = new TerrainImporter();
+    const fallbackTerrain = TerrainImporterSystem.createFallbackTerrain();
+
+    Terrain = { mesh: fallbackTerrain, size: 1000 };
     World3D.scene.add(Terrain.mesh);
 
-    Buildings = createBuildings({
-        mapSize: Terrain.size,
-        count: GraphicsState.currentPreset.buildingCount
-    });
-    World3D.scene.add(Buildings.group);
+    Buildings = null;
 
-    // Unified collider list for player/NPCs (updated each frame).
+    // Unified collider list for player/Bosses (updated each frame).
     WorldObstacles = { colliders: [] };
 
-    DarkSoulsWorld = createDarkSoulsWorldBuilder({
-        scene: World3D.scene,
-        terrainHeightAt: getTerrainHeightAt,
-        mapSize: Terrain.size,
-        chunkSize: 100,
-        viewDistance: 240,
-    });
-    World3D.scene.add(DarkSoulsWorld.root);
+    // Disable procedural/streamed world builder in boss encounter mode.
+    DarkSoulsWorld = null;
+
+    // Physics (Rapier)
+    Physics = new PhysicsSystem(World3D.scene);
 
     Sky = createSky({
         scene: World3D.scene,
@@ -660,19 +663,12 @@ function initThreeWorld() {
     PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
     PlayerCamera.enableMouseControl(UI.canvas);
 
-    // Create NPC System
-    NPCSystem = createNPCSystem({
-        scene: World3D.scene,
-        maxNPCs: Math.max(GraphicsState.currentPreset.npcMaxCount || 25, 40),
-        // Wave mode handles spawning; keep the ambient auto-spawn off.
-        spawnInterval: Number.POSITIVE_INFINITY,
-        detectionRadius: 20,
-        attackPlayerRadius: 2.2,
-        fleePlayerRadius: 4.0,
-        mapSize: Terrain.size,
-        buildings: WorldObstacles,
-        terrainHeightAt: getTerrainHeightAt,
-    });
+    // Boss encounter mode: no generic NPC pool/AI system.
+    NPCSystem = null;
+
+    // Zone + dialogue systems
+    ZoneManagerSystem = new ZoneManager(World3D.scene, Player.mesh);
+    Dialogue = new DialogueSystem(document.getElementById('hud'));
 
     // ============================================
     // ELITE SYSTEMS INITIALIZATION
@@ -712,40 +708,11 @@ function initThreeWorld() {
     TrailsSystem = createTrailsSystem(World3D.scene);
     DustEmitterSystem = createDustEmitterSystem(World3D.scene);
 
-    // Pass references to NPC system
-    NPCSystem.setTrailsSystem(TrailsSystem);
-    NPCSystem.setDustEmitterSystem(DustEmitterSystem);
-
-    // Viral Factory systems
-    DopaminePopupSystem = createDopaminePopupSystem(World3D.scene, World3D.camera);
-    ChaosMonitor = createChaosMonitor();
-
-    const dopamineUI = {
-        dopamine: UI.dopamine,
-        updateWaveDisplay: (waveNum) => {
-            if (UI?.dopamine?.waveText) {
-                UI.dopamine.waveText.textContent = `WAVE ${waveNum}`;
-            }
-        },
-        showMessage: (text) => {
-            OverlaySystem.show(text, 2.5, true);
-        },
-    };
-
-    ChaosScoreSystem = createChaosScoreSystem(GameState, dopamineUI, {
-        npcSystem: NPCSystem,
-        player: Player,
-    });
-
-    WaveSystem = createWaveSystem(World3D.scene, NPCSystem, GameState, dopamineUI, {
-        player: Player,
-        terrainHeightAt: getTerrainHeightAt,
-        spawnRadius: DOPAMINE_CONFIG.WAVE_SPAWN_RADIUS,
-        waveDelay: DOPAMINE_CONFIG.WAVE_SPAWN_DELAY,
-        maxWave: DOPAMINE_CONFIG.MAX_WAVES,
-    });
-
-    WaveSystem.startWaveMode();
+    // NPC/wave systems are disabled in boss encounter mode.
+    ChaosScoreSystem = null;
+    WaveSystem = null;
+    DopaminePopupSystem = null;
+    ChaosMonitor = null;
 
     // Create combat system
     CombatUI.screenFlash = document.createElement('div');
@@ -879,8 +846,7 @@ function initThreeWorld() {
         ChaosCamera.reset();
     });
 
-    // Now spawn initial NPCs after everything is initialized
-    NPCSystem.spawn(null, WAVE_SYSTEM_CONFIG.INITIAL_NPC_COUNT);
+    // Bosses + imported terrain are finalized during the loading phase (loadGameAssets).
 
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
 
@@ -934,7 +900,7 @@ function getTerrainHeightAt(x, z) {
     GroundRayOrigin.set(x, 200, z);
     GroundRaycaster.set(GroundRayOrigin, GroundRayDirection);
 
-    const hits = GroundRaycaster.intersectObject(Terrain.mesh, false);
+    const hits = GroundRaycaster.intersectObject(Terrain.mesh, true);
     if (hits.length > 0) {
         return hits[0].point.y;
     }
@@ -1107,6 +1073,15 @@ function update(dt, rawDt = dt) {
             decalSystem: DecalSystem,
         });
     }
+
+    // Boss encounter systems
+    ZoneManagerSystem?.update?.();
+    if (Bosses && Bosses.length > 0) {
+        for (const boss of Bosses) {
+            boss?.update?.(finalDt);
+        }
+    }
+    Physics?.update?.(finalDt);
 
     // Dopamine engine updates (use unscaled dt so hitstop doesn't stall UI)
     ChaosScoreSystem?.update?.(rawDt);
@@ -1758,6 +1733,100 @@ function updateGraphicsMenuActiveState() {
 // ============================================
 // LOADING SCREEN
 // ============================================
+
+function createBossPlaceholderModel({ color = 0xffffff, emissive = 0x000000, size = 8 } = {}) {
+    const group = new THREE.Group();
+
+    const geom = new THREE.IcosahedronGeometry(size, 1);
+    const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.5,
+        metalness: 0.15,
+        emissive,
+        emissiveIntensity: 0.35,
+    });
+
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    group.add(mesh);
+    return group;
+}
+
+async function loadImportedTerrain() {
+    if (!World3D || !TerrainImporterSystem) return;
+
+    const imported = await TerrainImporterSystem.loadTerrain();
+    if (!imported) return;
+
+    // Swap placeholder terrain.
+    if (Terrain?.mesh && Terrain.mesh !== imported) {
+        World3D.scene.remove(Terrain.mesh);
+    }
+
+    Terrain = {
+        ...(Terrain || {}),
+        mesh: imported,
+        size: Terrain?.size ?? 1000,
+    };
+
+    World3D.scene.add(imported);
+
+    await TerrainImporterSystem.loadTexturesAndNormals(imported);
+}
+
+async function initLegendaryPhysics() {
+    if (!Physics || !Terrain?.mesh) return;
+
+    await Physics.ready;
+
+    Physics.createTerrainCollider(Terrain.mesh);
+    if (Player?.mesh) {
+        Physics.createPlayerCollider(Player.mesh);
+    }
+}
+
+function spawnLegendaryBosses() {
+    if (!World3D || Bosses.length > 0) return;
+
+    const at = (x, z) => new THREE.Vector3(x, getTerrainHeightAt(x, z), z);
+
+    const malakorModel = createBossPlaceholderModel({ color: 0x8b4513, emissive: 0xff6600, size: 10 });
+    const sylphiraModel = createBossPlaceholderModel({ color: 0x9370db, emissive: 0x6a5acd, size: 9 });
+    const voidModel = createBossPlaceholderModel({ color: 0x111111, emissive: 0x6600ff, size: 12 });
+
+    const malakor = new Malakor(at(-300, -300), malakorModel, {
+        scene: World3D.scene,
+        player: Player?.mesh,
+        dialogueSystem: Dialogue,
+    });
+
+    const sylphira = new Sylphira(at(100, -300), sylphiraModel, {
+        scene: World3D.scene,
+        player: Player?.mesh,
+        dialogueSystem: Dialogue,
+    });
+
+    const voidEater = new VoidEater(at(100, 300), voidModel, {
+        scene: World3D.scene,
+        player: Player?.mesh,
+        dialogueSystem: Dialogue,
+    });
+
+    Bosses = [malakor, sylphira, voidEater];
+
+    for (const boss of Bosses) {
+        if (boss?.model) {
+            boss.model.position.copy(boss.position);
+            World3D.scene.add(boss.model);
+        }
+    }
+
+    PerformanceManagerElite?.setCamera?.(World3D.camera);
+    PerformanceManagerElite?.setBosses?.(Bosses, { radius: 120 });
+}
+
 async function loadGameAssets() {
     const loadSteps = [
         { text: 'Inicializando motor...', progress: 10 },
@@ -1771,6 +1840,16 @@ async function loadGameAssets() {
     for (const step of loadSteps) {
         UI.loading.text.textContent = step.text;
         UI.loading.bar.style.width = `${step.progress}%`;
+
+        if (step.progress === 40) {
+            await loadImportedTerrain();
+        }
+
+        if (step.progress === 80) {
+            await initLegendaryPhysics();
+            spawnLegendaryBosses();
+        }
+
         await simulateLoading(300);
     }
     
