@@ -6,11 +6,12 @@ import * as THREE from 'three';
 import { GRAPHICS_PRESETS } from './config.js';
 import { toonGradient } from './world.js';
 
-function createCheckerTexture({
-    size = 256,
-    squares = 8,
-    color1 = '#3f7f3f',
-    color2 = '#2f6f2f',
+function createNeonGridTexture({
+    size = 512,
+    gridSize = 32,
+    lineWidth = 2,
+    backgroundColor = '#0a0a1a',
+    gridColor = '#00ffff',
 } = {}) {
     if (typeof document === 'undefined') {
         return null;
@@ -21,29 +22,65 @@ function createCheckerTexture({
     canvas.height = size;
 
     const ctx = canvas.getContext('2d');
-    const step = size / squares;
+    
+    // Dark background
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, size, size);
 
-    for (let y = 0; y < squares; y++) {
-        for (let x = 0; x < squares; x++) {
-            ctx.fillStyle = (x + y) % 2 === 0 ? color1 : color2;
-            ctx.fillRect(x * step, y * step, step, step);
-        }
-    }
-
-    // Light noise for variation
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = '#000000';
-    for (let i = 0; i < 2000; i++) {
+    // Add subtle noise for depth
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#1a1a3a';
+    for (let i = 0; i < 1500; i++) {
         const px = Math.random() * size;
         const py = Math.random() * size;
         ctx.fillRect(px, py, 1, 1);
+    }
+    ctx.globalAlpha = 1.0;
+
+    // Draw neon grid lines
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = lineWidth;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = gridColor;
+
+    const step = size / gridSize;
+
+    // Vertical lines
+    for (let x = 0; x <= gridSize; x++) {
+        const px = x * step;
+        ctx.beginPath();
+        ctx.moveTo(px, 0);
+        ctx.lineTo(px, size);
+        ctx.stroke();
+    }
+
+    // Horizontal lines
+    for (let y = 0; y <= gridSize; y++) {
+        const py = y * step;
+        ctx.beginPath();
+        ctx.moveTo(0, py);
+        ctx.lineTo(size, py);
+        ctx.stroke();
+    }
+
+    // Add grid intersections with extra glow
+    ctx.fillStyle = gridColor;
+    ctx.shadowBlur = 12;
+    for (let x = 0; x <= gridSize; x++) {
+        for (let y = 0; y <= gridSize; y++) {
+            const px = x * step;
+            const py = y * step;
+            ctx.beginPath();
+            ctx.arc(px, py, lineWidth * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.anisotropy = 8;
+    texture.anisotropy = 16;
     return texture;
 }
 
@@ -71,16 +108,20 @@ export function createTerrain({
     geometry.attributes.position.needsUpdate = true;
     geometry.rotateX(-Math.PI / 2);
 
-    const texture = createCheckerTexture();
+    const texture = createNeonGridTexture();
     if (texture) {
-        const repeat = size / 30;
+        const repeat = size / 40;
         texture.repeat.set(repeat, repeat);
     }
 
-    const material = new THREE.MeshToonMaterial({
-        color: GRAPHICS_PRESETS.FLAT_COLORS.GROUND,
-        gradientMap: toonGradient,
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x1a1a2e,
         map: texture || null,
+        emissive: 0x00ccff,
+        emissiveMap: texture || null,
+        emissiveIntensity: 0.25,
+        roughness: 0.7,
+        metalness: 0.3,
         side: THREE.DoubleSide,
     });
 
