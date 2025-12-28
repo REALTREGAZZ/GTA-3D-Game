@@ -53,6 +53,15 @@ import { createSaveSystem } from './save-system.js';
 import { createPlayerControllerV2 } from './player-controller-v2.js';
 
 // ============================================
+// ELITE SYSTEMS (Enhanced functionality)
+// ============================================
+import { createHitstopSystem } from './hitstop-system.js';
+import { createScreenShakeSystem } from './screen-shake-system.js';
+import { createPostProcessingElite } from './post-processing-elite.js';
+import { createPerformanceManagerElite } from './performance-manager-elite.js';
+import { createGrabSystemElite } from './grab-system-elite.js';
+
+// ============================================
 // GAME STATE
 // ============================================
 const GameState = {
@@ -376,6 +385,15 @@ let ChargeParticles = null;
 let ImpactParticles = null;
 
 // ============================================
+// ELITE SYSTEMS STATE
+// ============================================
+let HitstopManager = null;
+let ScreenShakeManager = null;
+let PostProcessingElite = null;
+let PerformanceManagerElite = null;
+let GrabSystemElite = null;
+
+// ============================================
 // COMBAT & REPLAY UI
 // ============================================
 const CombatUI = {
@@ -656,10 +674,39 @@ function initThreeWorld() {
         terrainHeightAt: getTerrainHeightAt,
     });
 
-    // Dopamine engine systems
-    DecalSystem = createDecalSystem(World3D.scene, DOPAMINE_CONFIG.DECAL_MAX_POOL);
+    // ============================================
+    // ELITE SYSTEMS INITIALIZATION
+    // ============================================
+
+    // Hitstop and Screen Shake managers
+    HitstopManager = createHitstopSystem();
+    ScreenShakeManager = createScreenShakeSystem(World3D.camera);
+
+    // Elite Post-Processing (Bloom + Vignette + Chromatic)
+    PostProcessingElite = createPostProcessingElite(World3D.renderer, World3D.scene, World3D.camera, {
+        bloomStrength: 1.5,
+        bloomThreshold: 0.85,
+        bloomRadius: 0.4,
+        vignetteIntensity: 0.5,
+        vignetteEnabled: true,
+        chromaticEnabled: true,
+    });
+    PostProcessingElite.setSize(window.innerWidth, window.innerHeight);
+
+    // Keep original PostProcessing for compatibility
     PostProcessing = createPostProcessingEffects(World3D.renderer, World3D.scene, World3D.camera);
     PostProcessing.setSize(window.innerWidth, window.innerHeight);
+
+    // Elite Performance Manager
+    PerformanceManagerElite = createPerformanceManagerElite(World3D.renderer, World3D.scene, {
+        targetFPS: GAME_CONFIG.FPS,
+        minFPS: 40,
+    });
+    PerformanceManagerElite.setBloomPass(PostProcessingElite.getBloomPass());
+    PerformanceManagerElite.setSunLight(World3D.lights.sunLight);
+
+    // Dopamine engine systems
+    DecalSystem = createDecalSystem(World3D.scene, DOPAMINE_CONFIG.DECAL_MAX_POOL);
 
     // Juice Sprint systems
     TrailsSystem = createTrailsSystem(World3D.scene);
@@ -793,11 +840,21 @@ function initThreeWorld() {
     // Create Grab & Launch Entropy System
     ChargeParticles = createChargeParticleSystem(World3D.scene, 500);
     ImpactParticles = createImpactParticleSystem(World3D.scene, 1000);
+
+    // Original grab system (keep for compatibility)
     GrabSystem = createGrabSystem(Player, World3D.camera, World3D.scene, GameState, {
         npcSystem: NPCSystem,
         chargeParticles: ChargeParticles,
         impactParticles: ImpactParticles,
         postProcessing: PostProcessing,
+    });
+
+    // Elite grab system (with hitstop and screen shake integration)
+    GrabSystemElite = createGrabSystemElite(Player, World3D.camera, World3D.scene, GameState, {
+        npcSystem: NPCSystem,
+        hitstopManager: HitstopManager,
+        screenShakeManager: ScreenShakeManager,
+        postProcessing: PostProcessingElite,
     });
 
     // Set up death callback
@@ -895,12 +952,25 @@ function gameLoop(currentTime) {
     // Update FPS counter
     updateFpsCounter(deltaTime);
 
+    // ============================================
+    // ELITE SYSTEMS UPDATES (raw delta time)
+    // ============================================
+
+    // Hitstop Manager
+    HitstopManager?.update();
+    const shouldPauseForHitstop = HitstopManager?.isHitstopActive?.();
+
+    // Screen Shake Manager
+    if (ScreenShakeManager) {
+        ScreenShakeManager.update();
+    }
+
     // Impact Frame System (brutal freeze) + Screen Shake (exponential decay)
     // Both driven by *real* frame time (raw delta) for precision
     updateImpactFrame(deltaTime);
     updateScreenShake(deltaTime);
 
-    hitstopState.isActive = GameState.timeScale === 0;
+    hitstopState.isActive = GameState.timeScale === 0 || shouldPauseForHitstop;
     hitstopState.timeScale = GameState.timeScale;
 
     const finalDelta = hitstopState.isActive ? 0 : (deltaTime * hitstopState.timeScale);
@@ -1042,6 +1112,13 @@ function update(dt, rawDt = dt) {
     ChaosScoreSystem?.update?.(rawDt);
     WaveSystem?.update?.(rawDt);
     DecalSystem?.update?.(rawDt);
+
+    // Elite systems updates
+    PostProcessingElite?.update?.(rawDt);
+    PerformanceManagerElite?.update?.(rawDt);
+    GrabSystemElite?.update?.(rawDt);
+
+    // Original post-processing (keep for compatibility)
     PostProcessing?.update?.(rawDt);
 
     // Viral Factory updates
@@ -1148,7 +1225,10 @@ function render() {
         World3D.camera.position.add(shakeOffset);
     }
 
-    if (PostProcessing?.render) {
+    // Use Elite post-processing if available, otherwise original
+    if (PostProcessingElite?.render) {
+        PostProcessingElite.render();
+    } else if (PostProcessing?.render) {
         PostProcessing.render();
     } else {
         World3D.renderer.render(World3D.scene, World3D.camera);
@@ -1407,7 +1487,10 @@ function setupInputHandlers() {
         // Grab & Launch (G) - Note: Disabled Gravity Blast to use G for Grab
         if (e.code === 'KeyG' && !GameState.isPaused && !GameState.isReplaying && !GameState.playerControlsDisabled) {
             e.preventDefault();
-            if (GrabSystem && !GrabSystem.isGrabbing()) {
+            // Try Elite grab system first, fallback to original
+            if (GrabSystemElite && !GrabSystemElite.isCurrentlyGrabbing()) {
+                GrabSystemElite.startGrab();
+            } else if (GrabSystem && !GrabSystem.isGrabbing()) {
                 GrabSystem.startGrab();
             }
         }
@@ -1447,8 +1530,12 @@ function setupInputHandlers() {
         Keys[e.code] = false;
         
         // Launch grabbed object on G release
-        if (e.code === 'KeyG' && GrabSystem && GrabSystem.isGrabbing()) {
-            GrabSystem.launch();
+        if (e.code === 'KeyG') {
+            if (GrabSystemElite && GrabSystemElite.isCurrentlyGrabbing()) {
+                GrabSystemElite.launch();
+            } else if (GrabSystem && GrabSystem.isGrabbing()) {
+                GrabSystem.launch();
+            }
         }
     });
 
