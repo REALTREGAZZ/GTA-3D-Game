@@ -202,6 +202,39 @@ body {
     background: linear-gradient(to bottom, #6b9fff, #0044cc);
 }
 
+/* Stamina Section */
+.stamina-section {
+    bottom: 130px;
+    left: 30px;
+    width: 250px;
+}
+
+.stamina-bar {
+    width: 100%;
+    background: linear-gradient(to bottom, #00ff88, #008844);
+}
+
+/* Area Name */
+.area-section {
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+}
+
+.area-name {
+    display: inline-block;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-shadow: var(--text-shadow);
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 6px 14px;
+    border-radius: 8px;
+}
+
 /* Money Section */
 .money-section {
     top: 30px;

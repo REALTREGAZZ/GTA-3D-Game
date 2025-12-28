@@ -602,6 +602,9 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
     }
 
     function applyDamage(amount, direction, type, attacker = null) {
+        // Roll i-frames / invulnerability
+        if (player?.state?.invulnerable) return;
+
         // Track last attacker for kill cam
         if (type === 'NPC' && attacker) {
             gameState.player.lastAttacker = attacker;

@@ -1,0 +1,11 @@
+{
+  "mapSize": 600,
+  "chunkSize": 100,
+  "areas": [
+    {"id":"hub","name":"Firelink Ruins","center":{"x":0,"z":0},"radius":70,"theme":"hub"},
+    {"id":"parish","name":"Undead Parish","center":{"x":-180,"z":-40},"radius":140,"theme":"ruins"},
+    {"id":"forest","name":"Forest of Giants","center":{"x":180,"z":160},"radius":180,"theme":"forest"},
+    {"id":"lava","name":"Lava Cavern","center":{"x":180,"z":-180},"radius":160,"theme":"lava"},
+    {"id":"tower","name":"Castle Tower","center":{"x":-180,"z":180},"radius":110,"theme":"tower"}
+  ]
+}
