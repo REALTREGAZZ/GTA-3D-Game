@@ -93,6 +93,11 @@ export const GAME_CONFIG = {
         WATER_LEVEL: -5.0,
     },
     
+    // Terrain Settings
+    TERRAIN: {
+        SIZE: 1000,
+    },
+    
     // Combat Settings (EXAGGERATED FOR VIRALITY)
     COMBAT: {
         // Weapons

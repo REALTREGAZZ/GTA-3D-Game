@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GAME_CONFIG } from './config.js';
 
 export class TerrainImporter {
   constructor() {
@@ -182,14 +183,16 @@ export class TerrainImporter {
    * @private
    */
   _returnFallback() {
-    console.log('[TerrainImporter] ℹ️  Using fallback plane terrain (1000x1000)');
+    const terrainSize = GAME_CONFIG?.TERRAIN?.SIZE || 1000;
+    console.log(`[TerrainImporter] ℹ️  Using fallback plane terrain (${terrainSize}x${terrainSize})`);
     const fallback = this.createFallbackTerrain();
     this.terrainMesh = fallback;
     return fallback;
   }
 
   createFallbackTerrain() {
-    const geometry = new THREE.PlaneGeometry(1000, 1000, 64, 64);
+    const terrainSize = GAME_CONFIG?.TERRAIN?.SIZE || 1000;
+    const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 64, 64);
     const material = new THREE.MeshStandardMaterial({
       color: 0x8b7355,
       roughness: 0.8,
@@ -214,10 +217,21 @@ export class TerrainImporter {
         textureLoader.loadAsync('/assets/terrain/ao.png'),
       ]);
 
+      // Set tiling
+      [normalMap, aoMap].forEach(map => {
+        map.wrapS = map.wrapT = THREE.RepeatWrapping;
+        map.repeat.set(20, 20); // Tile 20 times across the 1000x1000 terrain
+      });
+
       terrain.traverse((node) => {
         if (!node?.isMesh || !node.material) return;
-        node.material.normalMap = normalMap;
-        node.material.aoMap = aoMap;
+        
+        // Only apply tiled terrain maps to the main terrain mesh
+        if (node.name === 'Terrain' || node.name.includes('terrain')) {
+          node.material.normalMap = normalMap;
+          node.material.aoMap = aoMap;
+        }
+        
         node.material.needsUpdate = true;
       });
     } catch (err) {
