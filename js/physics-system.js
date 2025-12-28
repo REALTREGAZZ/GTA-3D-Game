@@ -85,16 +85,29 @@ export class PhysicsSystem {
 
     const pos = playerObject.position;
 
-    const rigidBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(pos.x, pos.y, pos.z);
+    // Create dynamic rigid body for player (not kinematic)
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
     const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
     // Capsule: halfHeight=0.9, radius=0.4 -> total height 1.8
     const colliderDesc = RAPIER.ColliderDesc.capsule(0.9, 0.4);
     colliderDesc.setFriction(1.0);
     colliderDesc.setRestitution(0.0);
+    colliderDesc.setMass(80.0); // Reasonable mass for a player character
 
-    this.world.createCollider(colliderDesc, rigidBody);
+    const collider = this.world.createCollider(colliderDesc, rigidBody);
     this.playerBody = rigidBody;
+    this.playerCollider = collider;
+
+    // Disable automatic CCD (continuous collision detection) for better performance
+    rigidBody.enableCcd(false);
+
+    // Set linear damping to reduce sliding
+    rigidBody.setLinearDamping(0.8);
+    rigidBody.setAngularDamping(0.8);
+
+    // Lock rotation to prevent player from tipping over
+    rigidBody.setEnabledRotations(false, false, false);
 
     return rigidBody;
   }
