@@ -50,6 +50,7 @@ import { createPerformanceManager } from './performance-manager.js';
 import { createUISystem } from './ui-system.js';
 import { createSaveSystem } from './save-system.js';
 import { createPlayerControllerV2 } from './player-controller-v2.js';
+import { createPerformanceManagerEnhanced } from './performance-manager-enhanced.js';
 
 // ============================================
 // ELITE SYSTEMS (Enhanced functionality)
@@ -612,6 +613,15 @@ function initThreeWorld() {
         shadowFrustumSize: GraphicsState.currentPreset?.shadowFrustumSize || 90,
     });
 
+    // Enhanced performance manager with additional optimizations
+    PerformanceManagerEnhanced = createPerformanceManagerEnhanced({
+        renderer: World3D.renderer,
+        sunLight: World3D.lights.sunLight,
+        scene: World3D.scene,
+        targetFps: GAME_CONFIG.FPS,
+        shadowFrustumSize: GraphicsState.currentPreset?.shadowFrustumSize || 90,
+    });
+
     // Terrain is now imported (GLTF/GLB) instead of procedural generation.
     TerrainImporterSystem = new TerrainImporter();
     const fallbackTerrain = TerrainImporterSystem.createFallbackTerrain();
@@ -638,8 +648,8 @@ function initThreeWorld() {
 
     SaveSystem = createSaveSystem();
 
-    // Create player
-    Player = createPlayerControllerV2({ position: new THREE.Vector3(0, 5, 0) });
+    // Create player with physics system reference
+    Player = createPlayerControllerV2({ position: new THREE.Vector3(0, 5, 0), physicsSystem: Physics });
     World3D.scene.add(Player.mesh);
 
     // Load save if present
@@ -1064,6 +1074,12 @@ function update(dt, rawDt = dt) {
         Buildings.updateLOD(World3D.camera.position, GraphicsState.currentPreset);
     }
 
+    // Update enhanced performance manager
+    if (PerformanceManagerEnhanced && Player) {
+        PerformanceManagerEnhanced.setPlayerPosition(Player.getPosition());
+        PerformanceManagerEnhanced.update(rawDt);
+    }
+
     // Update NPC System (scaled)
     if (NPCSystem && Player) {
         NPCSystem.update(finalDt, {
@@ -1316,8 +1332,13 @@ function updateFpsCounter(deltaTime) {
     const avgFps = GraphicsState.fpsHistory.reduce((sum, f) => sum + f, 0) / GraphicsState.fpsHistory.length;
 
     // Update Performance Monitor for dynamic scaling
-    if (PerformanceMonitor) {
-        PerformanceMonitor.update(Math.round(avgFps));
+    if (PerformanceManager) {
+        PerformanceManager.update(Math.round(avgFps));
+    }
+
+    // Update enhanced performance manager
+    if (PerformanceManagerEnhanced) {
+        PerformanceManagerEnhanced.updateResolutionScale(Math.round(avgFps), deltaTime);
     }
 
     // Dynamic resolution + shadow focus
@@ -1783,7 +1804,10 @@ async function initLegendaryPhysics() {
 
     Physics.createTerrainCollider(Terrain.mesh);
     if (Player?.mesh) {
-        Physics.createPlayerCollider(Player.mesh);
+        const playerBody = Physics.createPlayerCollider(Player.mesh);
+        if (playerBody && Player.setPhysicsBody) {
+            Player.setPhysicsBody(playerBody);
+        }
     }
 }
 

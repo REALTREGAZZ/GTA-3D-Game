@@ -1,11 +1,10 @@
 /**
  * Player Controller V2
- * Currently delegates to the existing player system, but keeps an explicit module
- * boundary so future refactors don't bloat main.js.
+ * Uses Dark Souls inspired player controller with physics-based movement and collision.
  */
 
-import { createPlayer } from './player.js';
+import { createDarkSoulsPlayer } from './dark-souls-player-controller.js';
 
 export function createPlayerControllerV2(options = {}) {
-    return createPlayer(options);
+    return createDarkSoulsPlayer(options);
 }

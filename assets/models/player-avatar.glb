@@ -1,0 +1,13 @@
+This is a placeholder file for the Dark Souls inspired player avatar.
+The actual 3D model should be created using Blender or other 3D software
+and exported as a GLB file with the following characteristics:
+
+- Dark Souls inspired knight/warrior
+- Medieval armor with damage/wear
+- Height: ~2 meters
+- Includes animations: idle, walk, run, attack, dodge
+- Proper rigging for animations
+- Dark, menacing aesthetic
+
+For now, the game uses a programmatically generated Dark Souls style avatar
+through the dark-souls-avatar.js module.
