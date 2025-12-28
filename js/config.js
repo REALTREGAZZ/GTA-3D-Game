@@ -886,4 +886,87 @@ export const DOPAMINE_CONFIG = {
     CHROMATIC_ABERRATION_AMOUNT: 0.005,
 };
 
+// ============================================
+// GRAB & LAUNCH ENTROPY SYSTEM CONFIG
+// ============================================
+export const GRAB_SYSTEM_CONFIG = {
+    // Grab Mechanic
+    GRAB_RANGE: 5.0,
+    SPRING_CONSTANT: 500,
+    SPRING_DAMPING: 0.3,
+    
+    // Charge System
+    CHARGE_RATE: 5, // per frame (at 60fps = ~2 seconds to full)
+    MAX_CHARGE: 100,
+    
+    // Launch Velocities (base)
+    BASE_VELOCITY: 150,
+    MAX_VELOCITY_BONUS: 200, // 150 + 200 = 350 at full charge
+    
+    // Object Type Multipliers
+    NPC_MULTIPLIER: 1.0,
+    VEHICLE_MULTIPLIER: 3.0,
+    BUILDING_MULTIPLIER: 1.0,
+    
+    // Explosion Forces
+    EXPLOSION_RADIUS_BASE: 20,
+    EXPLOSION_RADIUS_VEHICLE: 40,
+    EXPLOSION_FORCE_BASE: 500,
+    EXPLOSION_FORCE_VEHICLE: 1500,
+    
+    // Screen Shake Multipliers
+    SCREEN_SHAKE_NPC: 2.0,
+    SCREEN_SHAKE_VEHICLE: 3.0,
+    SCREEN_SHAKE_BUILDING: 1.5,
+    
+    // Impact Frames
+    IMPACT_FRAMES_NPC: 3,
+    IMPACT_FRAMES_VEHICLE: 6,
+    IMPACT_FRAMES_BUILDING: 2,
+    
+    // Charge Visual
+    COLOR_START: 0xFFFFFF, // White
+    COLOR_MID: 0xFFFF00,   // Yellow at 50%
+    COLOR_END: 0xFF0000,   // Red at 100%
+    
+    // Charge Audio
+    AUDIO_FREQ_START: 400,
+    AUDIO_FREQ_END: 800,
+    
+    // Impact Audio
+    IMPACT_AUDIO_PITCH_MIN: 1.0,
+    IMPACT_AUDIO_PITCH_MAX: 1.5,
+    IMPACT_AUDIO_VOLUME: -3, // dB
+    
+    // Particles
+    CHARGE_PARTICLE_COUNT: 20,
+    CHARGE_PARTICLE_RADIUS: 2.0,
+    CHARGE_PARTICLE_SPEED: 2.0,
+    
+    IMPACT_PARTICLE_COUNT_MIN: 50,
+    IMPACT_PARTICLE_COUNT_MAX: 100,
+    IMPACT_PARTICLE_COUNT_VEHICLE: 200,
+    IMPACT_PARTICLE_VELOCITY_MIN: 50,
+    IMPACT_PARTICLE_VELOCITY_MAX: 150,
+    IMPACT_PARTICLE_LIFETIME: 2.0,
+    IMPACT_PARTICLE_LIFETIME_MAX: 4.0,
+    
+    // Gore-Neon Colors
+    GORE_COLORS: [
+        0xFF0055, // Neon Red
+        0x00FFFF, // Cyan
+        0x00FF00, // Acid Green
+        0xFF00FF, // Magenta
+    ],
+    
+    // Glitch Effect
+    GLITCH_DURATION: 3, // frames
+    GLITCH_CHROMATIC_OFFSET: 3, // pixels
+    GLITCH_NOISE_OPACITY: 0.1,
+    
+    // Audio Ducking
+    AUDIO_DUCKING_DURATION: 0.1, // seconds
+    AUDIO_DUCKING_DB: -9,
+};
+
 export { SATIRICAL_TEXTS };
