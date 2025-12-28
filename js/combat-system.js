@@ -373,7 +373,15 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         }
 
         const shakeIntensity = Math.min(1.0, damage / 30);
-        gameState.applyHitstop?.(0.7);
+
+        // BRUTAL IMPACT FEEDBACK: Trigger all game feel systems
+        gameState.triggerImpactFrame?.();
+
+        // Audio ducking coincides with impact frame (6 frames = ~0.1s at 60fps)
+        if (audioEngine && audioEngine.triggerDucking) {
+            audioEngine.triggerDucking(0.1);
+        }
+
         gameState.applyScreenShake?.(shakeIntensity, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
 
         const hitPoint = bestTarget.mesh.position.clone();
@@ -385,11 +393,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
            // Trigger camera zoom
            if (camera.triggerImpactZoom) {
                camera.triggerImpactZoom(1.15, 0.1);
-           }
-
-           // Trigger time freeze
-           if (window.GlobalTimeFreeze) {
-               window.GlobalTimeFreeze.slowMotion(0.1, 0.15);
            }
 
            // Trigger dopamine popup
@@ -409,8 +412,10 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
         const knockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE;
         const impulse = knockbackForce;
 
-        // Damage + aggro + furia
-        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse, true);
+        // Damage + aggro + furia with combo tracking for NPC panic
+        bestTarget.takeDamage(damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse, true, {
+            comboCount: state.currentCombo
+        });
 
         // Apply knockback and ragdoll
         applyKnockbackToNPC(bestTarget, attackDir, knockbackForce, { attackType: 'MELEE' });
@@ -781,8 +786,18 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                     const rangedKnockbackForce = GAME_CONFIG.COMBAT.KNOCKBACK_FORCE * 0.7;
                     const impulse = rangedKnockbackForce;
 
-                    // Damage + aggro + furia
-                    npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse);
+                    // BRUTAL IMPACT FEEDBACK: Lighter trigger for ranged (less intense than melee)
+                    gameState.triggerImpactFrame?.();
+
+                    // Audio ducking for ranged hits
+                    if (audioEngine && audioEngine.triggerDucking) {
+                        audioEngine.triggerDucking(0.08); // Slightly shorter for ranged
+                    }
+
+                    // Damage + aggro + furia with combo tracking for NPC panic
+                    npc.takeDamage(bullet.damage, npcPlayer || playerProxy || { getPosition: () => player.getPosition() }, impulse, false, {
+                        comboCount: state.currentCombo
+                    });
 
                     // Apply knockback and ragdoll
                     applyKnockbackToNPC(npc, bullet.direction, rangedKnockbackForce, { attackType: 'RANGED' });

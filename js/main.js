@@ -88,19 +88,79 @@ const GameState = {
 };
 
 // ============================================
-// HITSTOP + SCREEN SHAKE (VISUAL FEEDBACK)
+// IMPACT FRAME SYSTEM (BRUTAL FREEZE)
 // ============================================
-const HitstopState = {
-    freezeRemaining: 0,
-    recoveryRemaining: 0,
+const ImpactFrameState = {
+    active: false,
+    frameCount: 0,
+    phase: 'IDLE', // IDLE, FREEZE, SLOWMO, RECOVERING
+    slowmoTimeScale: 0.3,
+    recoveryTimeScale: 1.0,
 };
 
+function triggerImpactFrame() {
+    ImpactFrameState.active = true;
+    ImpactFrameState.frameCount = 0;
+    ImpactFrameState.phase = 'FREEZE';
+    GameState.timeScale = 0;
+    console.log('[ImpactFrame] Triggered - Frame 0 (FREEZE)');
+}
+
+function updateImpactFrame(rawDt) {
+    if (!ImpactFrameState.active) {
+        GameState.timeScale = 1.0;
+        return;
+    }
+
+    ImpactFrameState.frameCount++;
+
+    // Phase 1: Exact 3-frame freeze
+    if (ImpactFrameState.phase === 'FREEZE') {
+        if (ImpactFrameState.frameCount <= 3) {
+            GameState.timeScale = 0;
+            console.log(`[ImpactFrame] Frame ${ImpactFrameState.frameCount} - FREEZE`);
+        } else {
+            ImpactFrameState.phase = 'SLOWMO';
+            ImpactFrameState.frameCount = 0;
+            console.log('[ImpactFrame] Entering SLOWMO phase (0.3x)');
+        }
+    }
+    // Phase 2: 3-frame slow-motion at 0.3x
+    else if (ImpactFrameState.phase === 'SLOWMO') {
+        if (ImpactFrameState.frameCount <= 3) {
+            GameState.timeScale = ImpactFrameState.slowmoTimeScale;
+            console.log(`[ImpactFrame] Frame ${ImpactFrameState.frameCount} - SLOWMO (0.3x)`);
+        } else {
+            ImpactFrameState.phase = 'RECOVERING';
+            ImpactFrameState.frameCount = 0;
+            console.log('[ImpactFrame] Recovering to normal speed');
+        }
+    }
+    // Phase 3: Recovery to normal speed
+    else if (ImpactFrameState.phase === 'RECOVERING') {
+        // Smooth recovery over 2 frames
+        const recoveryProgress = Math.min(1.0, ImpactFrameState.frameCount / 2.0);
+        GameState.timeScale = ImpactFrameState.slowmoTimeScale + (1.0 - ImpactFrameState.slowmoTimeScale) * recoveryProgress;
+
+        if (ImpactFrameState.frameCount >= 2) {
+            ImpactFrameState.active = false;
+            ImpactFrameState.phase = 'IDLE';
+            GameState.timeScale = 1.0;
+            console.log('[ImpactFrame] Complete - Normal speed');
+        }
+    }
+}
+
+// ============================================
+// SCREEN SHAKE (EXPONENTIAL DECAY)
+// ============================================
 const ScreenShakeState = {
     strength: 0,
     timeRemaining: 0,
     sampleTimer: 0,
     currentOffset: new THREE.Vector3(),
     targetOffset: new THREE.Vector3(),
+    decayConstant: 8.0, // k in A * e^(-kt)
 };
 
 // Overlay System for Satirical Texts - DOPAMINE ARCHITECTURE
@@ -207,8 +267,9 @@ function applyScreenShake(intensity = 1.0, duration = null) {
 function updateScreenShake(rawDt) {
     const baseDuration = Math.max(0.0001, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
 
-    const decay = GAME_CONFIG.COMBAT.SCREEN_SHAKE_DECAY;
-    const frameDecay = Math.pow(decay, rawDt * 60);
+    // EXPONENTIAL DECAY: A * e^(-kt)
+    // Frame-based exponential decay using decayConstant k
+    const frameDecay = Math.exp(-ScreenShakeState.decayConstant * rawDt);
 
     ScreenShakeState.strength *= frameDecay;
     ScreenShakeState.timeRemaining = Math.max(0, ScreenShakeState.timeRemaining - rawDt);
@@ -251,10 +312,12 @@ function updateScreenShake(rawDt) {
 }
 
 GameState.applyHitstop = applyHitstop;
+GameState.triggerImpactFrame = triggerImpactFrame;
 GameState.applyScreenShake = applyScreenShake;
 
-// Make globally accessible for abilities
+// Make globally accessible for abilities and combat
 window.applyScreenShake = applyScreenShake;
+window.triggerImpactFrame = triggerImpactFrame;
 
 // ============================================
 // THREE.JS WORLD STATE
@@ -287,6 +350,9 @@ let PerformanceMonitor = null;
 // Viral Factory Systems
 let ChaosMonitor = null;
 let DopaminePopupSystem = null;
+
+// Game Feel Overhaul Systems
+let ImpactFrameManager = null;
 
 // ============================================
 // COMBAT & REPLAY UI
@@ -741,8 +807,9 @@ function gameLoop(currentTime) {
     // Update FPS counter
     updateFpsCounter(deltaTime);
 
-    // Hitstop + shake updates are driven by *real* frame time (raw delta)
-    updateHitstop(deltaTime);
+    // Impact Frame System (brutal freeze) + Screen Shake (exponential decay)
+    // Both driven by *real* frame time (raw delta) for precision
+    updateImpactFrame(deltaTime);
     updateScreenShake(deltaTime);
 
     const scaledDeltaTime = deltaTime * GameState.timeScale;
@@ -835,6 +902,7 @@ function update(dt, rawDt = dt) {
     // Update audio engine listener position
     if (audioEngine && World3D?.camera) {
         audioEngine.updateListenerPosition(World3D.camera.position);
+        audioEngine.updateDucking();
     }
 
     // Update sky + lighting based on time of day
