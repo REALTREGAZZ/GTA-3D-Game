@@ -30,9 +30,12 @@ export function createPlayer({ position = new THREE.Vector3(0, 2, 0) } = {}) {
     const materials = humanoid.materials;
 
     // Create feet group for animation system (wraps both legs)
+    // Note: leftLeg and rightLeg are already added to group by createLowPolyHumanoid
+    // We create feet group but don't reparent the legs to maintain hierarchy
     const feet = new THREE.Group();
-    feet.add(leftLeg);
-    feet.add(rightLeg);
+    feet.position.set(0, 0, 0);
+    feet.rotation.set(0, 0, 0);
+    feet.scale.set(1, 1, 1);
     group.add(feet);
 
     // Direction indicator
