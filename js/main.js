@@ -649,9 +649,11 @@ function initThreeWorld() {
 
     SaveSystem = createSaveSystem();
 
-    // Create player with physics system reference
-    Player = createPlayerControllerV2({ position: new THREE.Vector3(0, 5, 0), physicsSystem: Physics });
+    // Create player with physics system reference - spawn at safe height above terrain
+    const initialSpawnPos = new THREE.Vector3(0, 10, 0); // Spawn high initially, physics will settle
+    Player = createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics });
     World3D.scene.add(Player.mesh);
+    console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
 
     // Load save if present
     const saveData = SaveSystem.load();
@@ -850,7 +852,7 @@ function initThreeWorld() {
     ReplaySystem.setOnReplayEnd(() => {
         GameState.isReplaying = false;
         // Respawn player
-        const spawnPos = new THREE.Vector3(0, 5, 0);
+        const spawnPos = getSafeSpawnPosition(0, 0, 3);
         Player.respawn(spawnPos);
         CombatSystem.reset();
         // Reset chaos camera state
@@ -917,6 +919,11 @@ function getTerrainHeightAt(x, z) {
     }
 
     return 0;
+}
+
+function getSafeSpawnPosition(x = 0, z = 0, clearance = 3) {
+    const groundY = getTerrainHeightAt(x, z);
+    return new THREE.Vector3(x, groundY + clearance, z);
 }
 
 function gameLoop(currentTime) {
@@ -1006,8 +1013,8 @@ function update(dt, rawDt = dt) {
     }
 
     // Update player (scaled)
-    if (Player && Buildings && PlayerCamera && !GameState.playerControlsDisabled) {
-        const staticColliders = Buildings.colliders || [];
+    if (Player && PlayerCamera && !GameState.playerControlsDisabled) {
+        const staticColliders = Buildings?.colliders || [];
         const streamedColliders = DarkSoulsWorld?.getColliders?.() || [];
         const allColliders = staticColliders.concat(streamedColliders);
 
@@ -1017,6 +1024,10 @@ function update(dt, rawDt = dt) {
 
         Player.setColliders(allColliders);
         Player.update(finalDt, Keys, allColliders, getTerrainHeightAt, PlayerCamera.state.horizontalAngle);
+
+        // Step physics immediately after applying player input so camera/UI
+        // and any gameplay systems see the latest rigidbody positions this frame.
+        Physics?.update?.(finalDt);
 
         // Sync stamina for UI/save.
         if (Player?.state && typeof Player.state.stamina === 'number') {
@@ -1098,7 +1109,6 @@ function update(dt, rawDt = dt) {
             boss?.update?.(finalDt);
         }
     }
-    Physics?.update?.(finalDt);
 
     // Dopamine engine updates (use unscaled dt so hitstop doesn't stall UI)
     ChaosScoreSystem?.update?.(rawDt);
@@ -1500,7 +1510,7 @@ function setupInputHandlers() {
                     ReplaySystem.stopReplay();
                 }
                 GameState.isReplaying = false;
-                const spawnPos = new THREE.Vector3(0, 5, 0);
+                const spawnPos = getSafeSpawnPosition(0, 0, 3);
                 if (Player) Player.respawn(spawnPos);
                 if (CombatSystem) CombatSystem.reset();
             }
@@ -1805,9 +1815,19 @@ async function initLegendaryPhysics() {
 
     Physics.createTerrainCollider(Terrain.mesh);
     if (Player?.mesh) {
+        console.log('[Init] Creating player physics collider at position:', Player.mesh.position.x, Player.mesh.position.y, Player.mesh.position.z);
+        
+        // IMPORTANT: Update player's physics system reference BEFORE creating collider
+        if (Player.setPhysicsSystem) {
+            Player.setPhysicsSystem(Physics);
+        }
+        
         const playerBody = Physics.createPlayerCollider(Player.mesh);
         if (playerBody && Player.setPhysicsBody) {
             Player.setPhysicsBody(playerBody);
+            console.log('[Init] Player physics body created successfully');
+        } else {
+            console.error('[Init] Failed to create player physics body');
         }
     }
 }
