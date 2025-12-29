@@ -579,6 +579,182 @@ const UI = {
 };
 
 // ============================================
+// PLAYER PHYSICS SETUP
+// ============================================
+function setupPlayerPhysics() {
+    if (!Physics || !Physics.world || !Player) {
+        console.warn('[Init] Cannot setup player physics - Physics or Player not initialized');
+        return;
+    }
+
+    // Wait for Physics to be ready (it's async)
+    Physics.ready.then(() => {
+        if (!Physics.world) {
+            console.warn('[Init] Physics world not ready');
+            return;
+        }
+
+        // Create player collider (Kinematic Character Controller)
+        const playerBody = Physics.createPlayerCollider(Player.group);
+        
+        if (playerBody) {
+            Player.setPhysicsBody(playerBody);
+            Player.setPhysicsSystem(Physics);
+            console.log('[Init] Player physics body created and assigned');
+        } else {
+            console.warn('[Init] Failed to create player physics body');
+        }
+    }).catch(err => {
+        console.error('[Init] Error setting up player physics:', err);
+    });
+}
+
+// ============================================
+// ASYNC PLAYER & DEPENDENT SYSTEMS INITIALIZATION
+// ============================================
+async function initPlayerAndDependentSystems() {
+    // Wait for terrain to be loaded (check every 100ms)
+    while (!Terrain || !Terrain.mesh) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    console.log('[Init] Terrain loaded, creating player...');
+
+    // Create player with physics system reference - spawn at safe height above terrain
+    const initialSpawnPos = new THREE.Vector3(0, 10, 0); // Spawn high initially, physics will settle
+    Player = await createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics });
+    World3D.scene.add(Player.group);
+    console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
+
+    // Setup physics for player after player is created
+    setupPlayerPhysics();
+
+    // Load save if present
+    const saveData = SaveSystem.load();
+    if (saveData) {
+        SaveSystem.applyLoaded(saveData, { player: Player, gameState: GameState });
+    }
+
+    // Create UI system (needs terrain size and player)
+    UISystem = createUISystem({
+        ui: UI,
+        player: Player,
+        gameState: GameState,
+        terrainSize: Terrain.size,
+        world: DarkSoulsWorld,
+    });
+
+    // Create animation controller
+    AnimationController = createAnimationController(Player);
+
+    // Create third-person camera controller
+    PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
+    PlayerCamera.enableMouseControl(UI.canvas);
+
+    // Zone manager system (needs player mesh)
+    ZoneManagerSystem = new ZoneManager(World3D.scene, Player.mesh);
+
+    // Create combat UI
+    const combatUI = createCombatUI();
+
+    // Player proxy used by NPC AI (so NPCs can find + damage player via CombatSystem)
+    NPCPlayerProxy = {
+        getPosition: () => Player.getPosition(),
+        takeDamage: (amount, direction, attacker) => {
+            if (CombatSystem?.damagePlayerFromNPC) {
+                CombatSystem.damagePlayerFromNPC(amount, direction, attacker);
+                return;
+            }
+
+            // Fallback - should rarely happen (only if NPC hits during init)
+            GameState.player.health = Math.max(0, GameState.player.health - amount);
+            combatUI.updateHealth(GameState.player.health, GAME_CONFIG.PLAYER.MAX_HEALTH);
+        },
+    };
+
+    // Create combat system
+    CombatSystem = createCombatSystem(Player, World3D.scene, PlayerCamera, GameState, combatUI, {
+        npcSystem: NPCSystem,
+        playerProxy: NPCPlayerProxy,
+    });
+
+    // Create replay system
+    ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
+
+    // Create chaos camera system (cinematic FOV, tracking, kill cam)
+    ChaosCamera = createChaosCamera();
+
+    // Create ability system (Gravity Blast, etc.)
+    AbilitySystem = createAbilitySystem(Player, World3D.scene, World3D.camera, GameState, {
+        npcSystem: NPCSystem,
+        combatSystem: CombatSystem,
+        chaosCamera: ChaosCamera,
+        postProcessing: PostProcessing,
+    });
+
+    // Original grab system (keep for compatibility)
+    GrabSystem = createGrabSystem(Player, World3D.camera, World3D.scene, GameState, {
+        npcSystem: NPCSystem,
+        chargeParticles: ChargeParticles,
+        impactParticles: ImpactParticles,
+        postProcessing: PostProcessing,
+    });
+
+    // Elite grab system (with hitstop and screen shake integration)
+    GrabSystemElite = createGrabSystemElite(Player, World3D.camera, World3D.scene, GameState, {
+        npcSystem: NPCSystem,
+        hitstopManager: HitstopManager,
+        screenShakeManager: ScreenShakeManager,
+        postProcessing: PostProcessingElite,
+    });
+
+    // Set up death callback
+    GameState.onDeath = (deathEvent) => {
+        GameState.isReplaying = true;
+        const stats = CombatSystem.getStats();
+        ReplaySystem.startReplay(deathEvent, stats);
+    };
+
+    // Set up replay callbacks
+    ReplaySystem.setOnStatsUpdate((stats) => {
+        GameState.combat = stats;
+    });
+
+    ReplaySystem.setOnReplayEnd(() => {
+        GameState.isReplaying = false;
+        // Respawn player
+        const spawnPos = getSafeSpawnPosition(0, 0, 3);
+        Player.respawn(spawnPos);
+        CombatSystem.reset();
+        // Reset chaos camera state
+        ChaosCamera.reset();
+    });
+
+    console.log('[Init] Player and dependent systems initialized successfully');
+}
+
+// Helper function to create combat UI
+function createCombatUI() {
+    const combatUI = {
+        updateHealth: (health, maxHealth) => {
+            const percent = (health / maxHealth) * 100;
+            UI.hud.healthBar.style.width = `${percent}%`;
+            UI.hud.healthValue.textContent = Math.round(health);
+        },
+        updateWeapon: (weapon) => {
+            if (UI.hud.weaponName) {
+                UI.hud.weaponName.textContent = weapon === 'MELEE' ? 'PUÑOS' : 'PISTOLA';
+                UI.hud.weaponName.style.color = weapon === 'MELEE' ? '#ffcc00' : '#3498db';
+            }
+            if (UI.hud.ammoCount) {
+                UI.hud.ammoCount.textContent = weapon === 'MELEE' ? '∞' : '∞';
+            }
+        },
+        screenFlash: CombatUI.screenFlash,
+    };
+    return combatUI;
+}
+
+// ============================================
 // THREE.JS INITIALIZATION
 // ============================================
 function initThreeWorld() {
@@ -638,6 +814,9 @@ function initThreeWorld() {
     // Physics (Rapier)
     Physics = new PhysicsSystem(World3D.scene);
 
+    // Initialize placeholder Terrain object BEFORE async load
+    Terrain = { mesh: null, size: 1000 };
+
     // Load terrain GLB with physics collider (after Physics is initialized)
     TerrainImporterSystem.loadTerrain('/assets/terrain/volcanic-highland.glb').then((terrain) => {
         if (terrain) {
@@ -677,43 +856,10 @@ function initThreeWorld() {
 
     SaveSystem = createSaveSystem();
 
-    // Create player with physics system reference - spawn at safe height above terrain
-    const initialSpawnPos = new THREE.Vector3(0, 10, 0); // Spawn high initially, physics will settle
-    createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics }).then((player) => {
-        Player = player;
-        World3D.scene.add(Player.group);
-        console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
-
-        // Setup physics for player after player is created
-        setupPlayerPhysics();
-    });
-
-    // Load save if present
-    const saveData = SaveSystem.load();
-    if (saveData) {
-        SaveSystem.applyLoaded(saveData, { player: Player, gameState: GameState });
-    }
-
-    UISystem = createUISystem({
-        ui: UI,
-        player: Player,
-        gameState: GameState,
-        terrainSize: Terrain.size,
-        world: DarkSoulsWorld,
-    });
-
-    // Create animation controller
-    AnimationController = createAnimationController(Player);
-
-    // Create third-person camera controller
-    PlayerCamera = createThirdPersonCamera(World3D.camera, Player);
-    PlayerCamera.enableMouseControl(UI.canvas);
-
     // Boss encounter mode: no generic NPC pool/AI system.
     NPCSystem = null;
 
-    // Zone + dialogue systems
-    ZoneManagerSystem = new ZoneManager(World3D.scene, Player.mesh);
+    // Dialogue system
     Dialogue = new DialogueSystem(document.getElementById('hud'));
 
     // ============================================
@@ -761,7 +907,11 @@ function initThreeWorld() {
     DopaminePopupSystem = null;
     ChaosMonitor = null;
 
-    // Create combat system
+    // Create Grab & Launch Entropy System (particle systems - don't need player)
+    ChargeParticles = createChargeParticleSystem(World3D.scene, 500);
+    ImpactParticles = createImpactParticleSystem(World3D.scene, 1000);
+
+    // Create combat UI elements
     CombatUI.screenFlash = document.createElement('div');
     CombatUI.screenFlash.id = 'screenFlash';
     CombatUI.screenFlash.style.cssText = `
@@ -798,101 +948,6 @@ function initThreeWorld() {
     `;
     document.body.appendChild(UI.hud.targetDistance);
 
-    // UI update functions
-    const combatUI = {
-        updateHealth: (health, maxHealth) => {
-            const percent = (health / maxHealth) * 100;
-            UI.hud.healthBar.style.width = `${percent}%`;
-            UI.hud.healthValue.textContent = Math.round(health);
-        },
-        updateWeapon: (weapon) => {
-            if (UI.hud.weaponName) {
-                UI.hud.weaponName.textContent = weapon === 'MELEE' ? 'PUÑOS' : 'PISTOLA';
-                UI.hud.weaponName.style.color = weapon === 'MELEE' ? '#ffcc00' : '#3498db';
-            }
-            if (UI.hud.ammoCount) {
-                UI.hud.ammoCount.textContent = weapon === 'MELEE' ? '∞' : '∞';
-            }
-        },
-        screenFlash: CombatUI.screenFlash,
-    };
-
-    // Player proxy used by NPC AI (so NPCs can find + damage player via CombatSystem)
-    NPCPlayerProxy = {
-        getPosition: () => Player.getPosition(),
-        takeDamage: (amount, direction, attacker) => {
-            if (CombatSystem?.damagePlayerFromNPC) {
-                CombatSystem.damagePlayerFromNPC(amount, direction, attacker);
-                return;
-            }
-
-            // Fallback - should rarely happen (only if NPC hits during init)
-            GameState.player.health = Math.max(0, GameState.player.health - amount);
-            combatUI.updateHealth(GameState.player.health, GAME_CONFIG.PLAYER.MAX_HEALTH);
-        },
-    };
-
-    CombatSystem = createCombatSystem(Player, World3D.scene, PlayerCamera, GameState, combatUI, {
-        npcSystem: NPCSystem,
-        playerProxy: NPCPlayerProxy,
-    });
-
-    // Create replay system
-    ReplaySystem = createReplaySystem(World3D.scene, World3D.camera, Player);
-
-    // Create chaos camera system (cinematic FOV, tracking, kill cam)
-    ChaosCamera = createChaosCamera();
-
-    // Create ability system (Gravity Blast, etc.)
-    AbilitySystem = createAbilitySystem(Player, World3D.scene, World3D.camera, GameState, {
-        npcSystem: NPCSystem,
-        combatSystem: CombatSystem,
-        chaosCamera: ChaosCamera,
-        postProcessing: PostProcessing,
-    });
-
-    // Create Grab & Launch Entropy System
-    ChargeParticles = createChargeParticleSystem(World3D.scene, 500);
-    ImpactParticles = createImpactParticleSystem(World3D.scene, 1000);
-
-    // Original grab system (keep for compatibility)
-    GrabSystem = createGrabSystem(Player, World3D.camera, World3D.scene, GameState, {
-        npcSystem: NPCSystem,
-        chargeParticles: ChargeParticles,
-        impactParticles: ImpactParticles,
-        postProcessing: PostProcessing,
-    });
-
-    // Elite grab system (with hitstop and screen shake integration)
-    GrabSystemElite = createGrabSystemElite(Player, World3D.camera, World3D.scene, GameState, {
-        npcSystem: NPCSystem,
-        hitstopManager: HitstopManager,
-        screenShakeManager: ScreenShakeManager,
-        postProcessing: PostProcessingElite,
-    });
-
-    // Set up death callback
-    GameState.onDeath = (deathEvent) => {
-        GameState.isReplaying = true;
-        const stats = CombatSystem.getStats();
-        ReplaySystem.startReplay(deathEvent, stats);
-    };
-
-    // Set up replay callbacks
-    ReplaySystem.setOnStatsUpdate((stats) => {
-        GameState.combat = stats;
-    });
-
-    ReplaySystem.setOnReplayEnd(() => {
-        GameState.isReplaying = false;
-        // Respawn player
-        const spawnPos = getSafeSpawnPosition(0, 0, 3);
-        Player.respawn(spawnPos);
-        CombatSystem.reset();
-        // Reset chaos camera state
-        ChaosCamera.reset();
-    });
-
     // Bosses + imported terrain are finalized during the loading phase (loadGameAssets).
 
     Sky.update({ timeHours: GameState.world.time, camera: World3D.camera });
@@ -911,15 +966,20 @@ function initThreeWorld() {
 
     console.log('--- World Initialization Debug ---');
     console.log('World3D:', World3D);
-    console.log('Terrain created:', Terrain?.mesh);
+    console.log('Terrain created (placeholder):', Terrain?.mesh);
     console.log('Buildings created:', Buildings?.group);
     console.log('World renderer:', World3D?.renderer);
-    console.log('Player:', Player);
+    console.log('Player: (will be initialized after terrain loads)');
     console.log('Camera:', World3D.camera);
     console.log('Camera Position:', World3D.camera.position);
     console.log('Scene:', World3D.scene);
     console.log('Scene children count:', World3D.scene?.children?.length);
     console.log('---------------------------------');
+
+    // Initialize player and all dependent systems asynchronously
+    initPlayerAndDependentSystems().catch(error => {
+        console.error('[Init] Failed to initialize player and dependent systems:', error);
+    });
 }
 
 // ============================================
@@ -1069,10 +1129,12 @@ function update(dt, rawDt = dt) {
         }
 
         // Environmental hazard: lava zone chip damage.
-        const lavaT = DarkSoulsWorld?.getLavaDamageAt?.(Player.mesh.position.x, Player.mesh.position.z) || 0;
-        if (lavaT > 0.25 && CombatSystem) {
-            const dps = 8 + lavaT * 12;
-            CombatSystem.applyDamage(dps * rawDt, new THREE.Vector3(0, 1, 0), 'ENV');
+        if (Player?.mesh) {
+            const lavaT = DarkSoulsWorld?.getLavaDamageAt?.(Player.mesh.position.x, Player.mesh.position.z) || 0;
+            if (lavaT > 0.25 && CombatSystem) {
+                const dps = 8 + lavaT * 12;
+                CombatSystem.applyDamage(dps * rawDt, new THREE.Vector3(0, 1, 0), 'ENV');
+            }
         }
     }
 
