@@ -87,26 +87,27 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     renderer.shadowMap.enabled = GRAPHICS_CONFIG.RENDERER.SHADOWS_ENABLED;
     renderer.shadowMap.type = THREE.PCFShadowMap; // Harder shadows look better with toon
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+    const ambientLight = new THREE.AmbientLight(0x6699CC, 0.4); // Blue soft ambient light
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
-    sunLight.position.set(50, 120, 30);
+    const sunLight = new THREE.DirectionalLight(0xFFB347, 1.0); // Golden amber sun
+    sunLight.position.set(300, 400, -300); // Epic sun position
     sunLight.castShadow = true;
 
     const shadowMapSize = GRAPHICS_CONFIG.RENDERER.SHADOW_MAP_SIZE;
+    sunLight.shadow.mapSize.set(2048, 2048); // Epic shadow quality
     sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
 
     sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 300;
-    const d = 120;
+    sunLight.shadow.camera.far = 500;
+    const d = 200; // Large shadow frustum for terrain
     sunLight.shadow.camera.left = -d;
     sunLight.shadow.camera.right = d;
     sunLight.shadow.camera.top = d;
     sunLight.shadow.camera.bottom = -d;
     sunLight.shadow.bias = -0.0002;
     sunLight.shadow.normalBias = 0.02;
-    sunLight.shadow.radius = 1;
+    sunLight.shadow.radius = 2;
 
     scene.add(sunLight);
     scene.add(sunLight.target);

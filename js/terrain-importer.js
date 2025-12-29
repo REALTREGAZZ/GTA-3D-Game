@@ -43,15 +43,33 @@ export class TerrainImporter {
       const gltf = await this.loader.loadAsync(path);
       const terrain = gltf.scene;
 
+      // Apply epic materials to terrain meshes
       terrain.traverse((node) => {
         if (!node?.isMesh) return;
         node.castShadow = true;
         node.receiveShadow = true;
 
+        // Create epic terrain material with textures
         const m = node.material;
         if (m) {
-          if ('roughness' in m) m.roughness = 0.8;
-          if ('metalness' in m) m.metalness = 0.1;
+          // Apply MeshStandardMaterial with proper lighting reaction
+          if (m.isMeshStandardMaterial) {
+            m.roughness = 0.9;
+            m.metalness = 0.1;
+            m.envMapIntensity = 1.0;
+          } else {
+            // Convert to MeshStandardMaterial if not already
+            const newMaterial = new THREE.MeshStandardMaterial({
+              color: m.color || 0x8b7355,
+              map: m.map || null,
+              normalMap: m.normalMap || null,
+              roughnessMap: m.roughnessMap || null,
+              roughness: 0.9,
+              metalness: 0.1,
+              envMapIntensity: 1.0,
+            });
+            node.material = newMaterial;
+          }
           m.needsUpdate = true;
         }
       });
