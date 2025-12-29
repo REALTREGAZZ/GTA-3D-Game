@@ -625,10 +625,7 @@ function initThreeWorld() {
 
     // Terrain is now imported (GLTF/GLB) instead of procedural generation.
     TerrainImporterSystem = new TerrainImporter();
-    const fallbackTerrain = TerrainImporterSystem.createFallbackTerrain();
-
-    Terrain = { mesh: fallbackTerrain, size: 1000 };
-    World3D.scene.add(Terrain.mesh);
+    let terrainMesh = null;
 
     Buildings = null;
 
@@ -641,19 +638,55 @@ function initThreeWorld() {
     // Physics (Rapier)
     Physics = new PhysicsSystem(World3D.scene);
 
+    // Load terrain GLB with physics collider (after Physics is initialized)
+    TerrainImporterSystem.loadTerrain('/assets/terrain/volcanic-highland.glb').then((terrain) => {
+        if (terrain) {
+            console.log('[Init] Terrain loaded successfully');
+            terrainMesh = terrain;
+            Terrain = { mesh: terrain, size: 1000 };
+            World3D.scene.add(terrain);
+
+            // Load textures for terrain
+            TerrainImporterSystem.loadTexturesAndNormals(terrain);
+
+            // Create trimesh collider from terrain geometry
+            if (Physics && Physics.world) {
+                Physics.createTerrainCollider(terrain);
+                console.log('[Init] Terrain physics collider created');
+            }
+        } else {
+            console.log('[Init] Using fallback terrain');
+            const fallback = TerrainImporterSystem.createFallbackTerrain();
+            terrainMesh = fallback;
+            Terrain = { mesh: fallback, size: 1000 };
+            World3D.scene.add(fallback);
+
+            // Create collider for fallback terrain
+            if (Physics && Physics.world) {
+                Physics.createTerrainCollider(fallback);
+            }
+        }
+    });
+
     Sky = createSky({
         scene: World3D.scene,
         sunLight: World3D.lights.sunLight,
         ambientLight: World3D.lights.ambientLight,
+        hdriPath: '/assets/textures/sky-sunset-hdri.jpg',
     });
 
     SaveSystem = createSaveSystem();
 
     // Create player with physics system reference - spawn at safe height above terrain
     const initialSpawnPos = new THREE.Vector3(0, 10, 0); // Spawn high initially, physics will settle
-    Player = createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics });
-    World3D.scene.add(Player.mesh);
-    console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
+    createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics }).then((player) => {
+        Player = player;
+        World3D.scene.add(Player.group);
+        console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
+
+        // Setup physics for player after player is created
+        setupPlayerPhysics();
+    });
 
     // Load save if present
     const saveData = SaveSystem.load();
@@ -692,10 +725,11 @@ function initThreeWorld() {
     ScreenShakeManager = createScreenShakeSystem(World3D.camera);
 
     // Elite Post-Processing (Bloom + Vignette + Chromatic)
+    // Epic bloom: strength 1.5, radius 0.8, threshold 0.2 - UI and magic will glow!
     PostProcessingElite = createPostProcessingElite(World3D.renderer, World3D.scene, World3D.camera, {
         bloomStrength: 1.5,
-        bloomThreshold: 0.85,
-        bloomRadius: 0.4,
+        bloomThreshold: 0.2,
+        bloomRadius: 0.8,
         vignetteIntensity: 0.5,
         vignetteEnabled: true,
         chromaticEnabled: true,

@@ -12,11 +12,11 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { DOPAMINE_CONFIG } from './config.js';
 
 export const POST_PROCESSING_CONFIG = {
-    // Bloom settings
+    // Bloom settings - Epic glow for powers and UI
     BLOOM: {
         strength: 1.5,
-        radius: 0.4,
-        threshold: 0.85,
+        radius: 0.8,
+        threshold: 0.2,
     },
 
     // Vignette settings

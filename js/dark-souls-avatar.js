@@ -1,53 +1,74 @@
 /**
  * Dark Souls Inspired Player Avatar
- * Creates a Dark Souls style knight/warrior character
+ * Loads player-avatar.glb or creates a procedural knight/warrior character
  */
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createLowPolyHumanoid } from './lowpoly-characters.js';
 
-export function createDarkSoulsAvatar() {
-    // Dark Souls color palette - dark, menacing, medieval
+export async function createDarkSoulsAvatar(options = {}) {
+    const { preferGLB = true } = options;
+
+    // Try to load GLB model first
+    if (preferGLB) {
+        const loader = new GLTFLoader();
+        try {
+            const gltf = await loader.loadAsync('/assets/models/player-avatar.glb');
+            const model = gltf.scene;
+
+            // Scale and position adjustment
+            model.scale.set(1, 1, 1);
+            model.position.set(0, 0, 0);
+
+            // Enable shadows
+            model.traverse((node) => {
+                if (node?.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
+
+            console.log('[DarkSoulsAvatar] Loaded player-avatar.glb successfully');
+            return {
+                group: model,
+                materials: {},
+                isGLB: true,
+                mixer: new THREE.AnimationMixer(model)
+            };
+        } catch (err) {
+            console.warn('[DarkSoulsAvatar] Could not load player-avatar.glb, using procedural avatar');
+        }
+    }
+
+    // Fallback to procedural avatar
     const darkSoulsColors = {
-        // Dark armored torso with metallic sheen
         torso: 0x2a2a2a,
-        // Darker arms for contrast
         arms: 0x1e1e1e,
-        // Even darker legs
         legs: 0x121212,
-        // Helm/head - dark iron
         head: 0x333333,
-        // Weapon/accessories - blood red accents
         accent: 0x8b0000,
-        // Armor highlights - aged steel
         highlight: 0x5a5a5a
     };
 
-    // Create base humanoid with Dark Souls colors
     const humanoid = createLowPolyHumanoid({
         torso: darkSoulsColors.torso,
         arms: darkSoulsColors.arms,
         legs: darkSoulsColors.legs,
         head: darkSoulsColors.head
-    }, true); // true = isPlayer
+    }, true);
 
     const group = humanoid.group;
     const materials = humanoid.materials;
 
-    // Add Dark Souls style armor details
     addDarkSoulsArmorDetails(group, darkSoulsColors);
-
-    // Add weapon (simple sword placeholder)
     addDarkSoulsWeapon(group, darkSoulsColors);
-
-    // Add cape/cloth for dramatic effect
     addDarkSoulsCape(group, darkSoulsColors);
 
-    // Modify materials to have more metallic/armored look
     Object.values(materials).forEach(material => {
         if (material) {
-            material.metalness = 0.3; // Slight metallic sheen
-            material.roughness = 0.6; // Slightly rough armor
+            material.metalness = 0.3;
+            material.roughness = 0.6;
             material.needsUpdate = true;
         }
     });
@@ -55,7 +76,9 @@ export function createDarkSoulsAvatar() {
     return {
         ...humanoid,
         group: group,
-        materials: materials
+        materials: materials,
+        isGLB: false,
+        mixer: null
     };
 }
 

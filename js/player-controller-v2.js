@@ -1,10 +1,10 @@
 /**
- * Player Controller V2
+ * Player Controller V2 (Async)
  * Uses Dark Souls inspired player controller with physics-based movement and collision.
  */
 
 import { createDarkSoulsPlayer } from './dark-souls-player-controller.js';
 
-export function createPlayerControllerV2(options = {}) {
-    return createDarkSoulsPlayer(options);
+export async function createPlayerControllerV2(options = {}) {
+    return await createDarkSoulsPlayer(options);
 }

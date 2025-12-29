@@ -407,6 +407,7 @@ export const INPUT_CONFIG = {
         
         // Abilities
         ABILITY_GRAVITY_BLAST: ['KeyG'],
+        GRAB_LAUNCH: ['KeyH'],  // H key for Grab & Launch system
         
         // Camera
         ZOOM_IN: ['Equal', 'NumpadAdd'],

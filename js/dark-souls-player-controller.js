@@ -303,22 +303,41 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
 
             state.physicsBody.setLinvel({ x: nextVx, y: linVel.y, z: nextVz }, true);
 
-            // Ground check using capsule bottom (Rapier body is capsule center)
-            const physicsPos = state.physicsBody.translation();
-            const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
-            const CAPSULE_BOTTOM_OFFSET = 1.3; // halfHeight 0.9 + radius 0.4
-            const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
+            // GROUND CHECK using raycast from player feet (0.1 unit = millimeter tolerance)
+            if (_physicsSystem && _physicsSystem.checkGround) {
+                state.isGrounded = _physicsSystem.checkGround(group.position);
 
-            state.isGrounded = bottomY <= groundLevel + 0.08 && linVel.y <= 1.0;
+                // Also check if we're stuck in terrain and lift out
+                const physicsPos = state.physicsBody.translation();
+                const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
+                const CAPSULE_BOTTOM_OFFSET = 1.3;
+                const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
 
-            // If we somehow spawned inside the terrain, lift the capsule out.
-            if (bottomY < groundLevel - 0.15) {
-                state.physicsBody.setTranslation(
-                    { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
-                    true
-                );
-                state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                state.isGrounded = true;
+                if (bottomY < groundLevel - 0.15) {
+                    state.physicsBody.setTranslation(
+                        { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
+                        true
+                    );
+                    state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                    state.isGrounded = true;
+                }
+            } else {
+                // Fallback to height-based check
+                const physicsPos = state.physicsBody.translation();
+                const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
+                const CAPSULE_BOTTOM_OFFSET = 1.3;
+                const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
+                state.isGrounded = bottomY <= groundLevel + 0.08 && linVel.y <= 1.0;
+
+                // If we somehow spawned inside the terrain, lift the capsule out.
+                if (bottomY < groundLevel - 0.15) {
+                    state.physicsBody.setTranslation(
+                        { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
+                        true
+                    );
+                    state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                    state.isGrounded = true;
+                }
             }
 
             // Jump: set vertical velocity (do not move mesh directly)
