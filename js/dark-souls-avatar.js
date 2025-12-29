@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { createLowPolyHumanoid } from './lowpoly-characters.js';
+import { audioEngine } from './audio-engine.js';
 
 export async function createDarkSoulsAvatar(options = {}) {
     const { preferGLB = true } = options;
