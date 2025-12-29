@@ -584,7 +584,6 @@ export function createNPC(position = new THREE.Vector3()) {
                 visual.playAnimation('fall', { once: true, fade: 0.12 });
 
                 const impact = Math.min(1.0, state.ragdollImpactSpeed / 20.0);
-                feedback?.applyHitstop?.(0.4 + 0.4 * impact);
                 feedback?.applyScreenShake?.(impact, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
                 
                 // Show satirical ragdoll overlay

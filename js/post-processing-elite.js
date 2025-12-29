@@ -15,9 +15,9 @@ export const POST_PROCESSING_CONFIG = {
     // Bloom settings - Epic glow for powers and UI
     // EMERGENCY FIX #3: Clamped bloom to prevent blinding glow bug in void
     BLOOM: {
-        strength: 1.5,        // Max strength (was causing self-amplifying glow)
+        strength: 0.5,        // Reduced from 1.5 to prevent blinding effect
         radius: 0.8,
-        threshold: 0.8,       // Higher threshold = less bloom (was 0.2, now 0.8)
+        threshold: 0.95,      // Increased from 0.8 to 0.95 - less pixels trigger bloom
     },
 
     // Vignette settings

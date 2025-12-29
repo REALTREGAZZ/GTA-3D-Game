@@ -456,8 +456,8 @@ export const GRAPHICS_CONFIG = {
         
         // Post-Processing
         BLOOM_ENABLED: true,
-        BLOOM_THRESHOLD: 0.8,
-        BLOOM_STRENGTH: 1.5,
+        BLOOM_THRESHOLD: 0.95,
+        BLOOM_STRENGTH: 0.5,
         BLOOM_RADIUS: 0.4,
         
         CHROMATIC_ABERRATION_ENABLED: false,
