@@ -275,6 +275,7 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 5,
         // Apply movement using physics
         if (state.physicsBody && _physicsSystem && _physicsSystem.world) {
             const now = Date.now();
+            let physicsPos = state.physicsBody.translation();
             const wantsMove = !!(
                 inputKeys.KeyW || inputKeys.KeyA || inputKeys.KeyS || inputKeys.KeyD ||
                 inputKeys.ArrowUp || inputKeys.ArrowLeft || inputKeys.ArrowDown || inputKeys.ArrowRight
@@ -308,7 +309,7 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 5,
                 state.isGrounded = _physicsSystem.checkGround(group.position);
 
                 // Also check if we're stuck in terrain and lift out
-                const physicsPos = state.physicsBody.translation();
+                physicsPos = state.physicsBody.translation();
                 const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
                 const capsuleBottomOffset = _physicsSystem?.playerBottomOffsetY ?? 1.3;
                 const bottomY = physicsPos.y - capsuleBottomOffset;
@@ -323,7 +324,7 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 5,
                 }
             } else {
                 // Fallback to height-based check
-                const physicsPos = state.physicsBody.translation();
+                physicsPos = state.physicsBody.translation();
                 const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
                 const capsuleBottomOffset = _physicsSystem?.playerBottomOffsetY ?? 1.3;
                 const bottomY = physicsPos.y - capsuleBottomOffset;
