@@ -55,12 +55,12 @@ export function applyToonMaterial(mesh, colorName, outlineScale = 1.08) {
 export function createWorld({ canvas, autoResize = true } = {}) {
     const scene = new THREE.Scene();
 
-    // Fog matches the neon world aesthetic - darker with slight blue tint
-    const fogColor = 0x0a0a1a;
+    // Fog for atmospheric depth - sky blue to create sense of horizon
+    const fogColor = 0x87CEEB;  // Sky blue (matches enhanced visuals)
     scene.fog = new THREE.Fog(
         fogColor,
-        GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_NEAR,
-        GRAPHICS_CONFIG.VIEW_DISTANCE.FOG_FAR,
+        50,  // Near distance - visible up close
+        500, // Far distance - fade into fog
     );
 
     const camera = new THREE.PerspectiveCamera(

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GAME_CONFIG } from './config.js';
 import { createDarkSoulsAvatar, createDarkSoulsAnimationController } from './dark-souls-avatar.js';
+import { audioEngine } from './audio-engine.js';
 
 export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 5, 0), physicsSystem = null } = {}) {
     // Create Dark Souls inspired avatar

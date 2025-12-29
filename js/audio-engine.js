@@ -1,6 +1,7 @@
 /**
  * Audio Engine - Synthesized Sound Effects
  * BRUTAL IMPACT FEEDBACK - NO SILENCE ALLOWED
+ * Enhanced with ambient audio and footstep sounds
  */
 
 import * as THREE from 'three';
@@ -30,6 +31,17 @@ class AudioEngine {
         this.duckedCutoff = 2000;
         this.normalVolume = 0.7;
         this.duckedVolume = 0.25; // -6dB relative to 0.7
+
+        // Ambient audio system
+        this.ambientGain = null;
+        this.ambientOscillator = null;
+        this.ambientFilter = null;
+        this.ambientPlaying = false;
+        this.ambientVolume = 0.3;
+
+        // Footstep system
+        this.lastFootstepTime = 0;
+        this.footstepCooldown = 150; // ms between footsteps
     }
 
     /**
@@ -631,10 +643,155 @@ class AudioEngine {
     }
 
     /**
+     * Start ambient audio loop (wind/environment)
+     */
+    startAmbient() {
+        if (!this.enabled || !this.audioContext) {
+            this.init();
+            if (!this.audioContext) return;
+        }
+
+        if (this.ambientPlaying) return;
+
+        const ctx = this.audioContext;
+        const now = ctx.currentTime;
+
+        // Create gain node for ambient volume
+        this.ambientGain = ctx.createGain();
+        this.ambientGain.gain.value = this.ambientVolume;
+
+        // Create lowpass filter for muffled wind sound
+        this.ambientFilter = ctx.createBiquadFilter();
+        this.ambientFilter.type = 'lowpass';
+        this.ambientFilter.frequency.value = 600; // Muffled wind
+        this.ambientFilter.Q.value = 1.0;
+
+        // Connect to master
+        this.ambientFilter.connect(this.ambientGain);
+        if (this.masterGain) {
+            this.ambientGain.connect(this.masterGain);
+        } else {
+            this.ambientGain.connect(ctx.destination);
+        }
+
+        // Create wind noise using multiple oscillators
+        const windOsc1 = ctx.createOscillator();
+        windOsc1.type = 'sine';
+        windOsc1.frequency.value = 80 + Math.random() * 40;
+
+        const windOsc2 = ctx.createOscillator();
+        windOsc2.type = 'sine';
+        windOsc2.frequency.value = 120 + Math.random() * 60;
+
+        // Create gain for LFO modulation
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 0.3;
+
+        // LFO for wind variation
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.1 + Math.random() * 0.1;
+
+        // Connect wind oscillators
+        windOsc1.connect(this.ambientFilter);
+        windOsc2.connect(this.ambientFilter);
+        lfo.connect(lfoGain.gain);
+        lfoGain.connect(this.ambientFilter.gain);
+
+        // Start all oscillators
+        windOsc1.start(now);
+        windOsc2.start(now);
+        lfo.start(now);
+
+        this.ambientOscillator = { windOsc1, windOsc2, lfo };
+        this.ambientPlaying = true;
+
+        console.log('[AudioEngine] Ambient audio started');
+    }
+
+    /**
+     * Stop ambient audio
+     */
+    stopAmbient() {
+        if (!this.ambientPlaying) return;
+
+        if (this.ambientGain) {
+            const ctx = this.audioContext;
+            const now = ctx.currentTime;
+            this.ambientGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        }
+
+        this.ambientPlaying = false;
+        console.log('[AudioEngine] Ambient audio stopped');
+    }
+
+    /**
+     * Play footstep sound
+     * @param {number} speed - Movement speed for volume adjustment
+     */
+    playFootstep(speed = 5.0) {
+        if (!this.enabled || !this.audioContext) {
+            this.init();
+            if (!this.audioContext) return;
+        }
+
+        const now = performance.now();
+        
+        // Prevent too-rapid footsteps
+        if (now - this.lastFootstepTime < this.footstepCooldown) return;
+        this.lastFootstepTime = now;
+
+        const ctx = this.audioContext;
+        const audioNow = ctx.currentTime;
+
+        // Volume based on speed
+        const volume = Math.min(0.5, 0.2 + (speed / 18) * 0.3);
+
+        // Create gain node
+        const gainNode = ctx.createGain();
+        gainNode.connect(this.masterGain || ctx.destination);
+
+        // Create noise burst for footstep
+        const bufferSize = ctx.sampleRate * 0.08;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < bufferSize; i++) {
+            // Decay envelope for footstep
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.02));
+        }
+
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = buffer;
+
+        // Lowpass filter for muddy/grassy footstep sound
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 300 + Math.random() * 150;
+        filter.Q.value = 1.5;
+
+        // Envelope
+        gainNode.gain.setValueAtTime(0, audioNow);
+        gainNode.gain.linearRampToValueAtTime(volume, audioNow + 0.005);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioNow + 0.08);
+
+        noiseSource.connect(filter);
+        filter.connect(gainNode);
+        noiseSource.start(audioNow);
+        noiseSource.stop(audioNow + 0.08);
+
+        // Register for voice culling
+        this.registerSound(gainNode, volume * 0.5, 0.08);
+    }
+
+    /**
      * Dispose and cleanup
      */
     dispose() {
         if (this.audioContext) {
+            // Stop ambient audio
+            this.stopAmbient();
+
             // Clear active sounds
             activeSounds.forEach(sound => {
                 if (sound.gainNode) {

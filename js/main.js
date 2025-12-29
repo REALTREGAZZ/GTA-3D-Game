@@ -931,6 +931,9 @@ function initThreeWorld() {
     // Initialize Audio Engine
     audioEngine.init();
 
+    // Start ambient audio loop (environmental sounds)
+    audioEngine.startAmbient();
+
     console.log('--- World Initialization Debug ---');
     console.log('World3D:', World3D);
     console.log('Terrain created (placeholder):', Terrain?.mesh);
@@ -1240,9 +1243,12 @@ function update(dt, rawDt = dt) {
     
     // Update Overlay System
     OverlaySystem.update(rawDt);
-    
+
     // Update overlay triggers
     updateOverlayTriggers();
+
+    // Update audio engine ducking system
+    audioEngine.updateDucking();
 };
 
 // Function to update overlay triggers

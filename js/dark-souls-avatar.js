@@ -61,6 +61,14 @@ export async function createDarkSoulsAvatar(options = {}) {
     const group = humanoid.group;
     const materials = humanoid.materials;
 
+    // Enable shadows for all meshes in the character
+    group.traverse((node) => {
+        if (node?.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
+
     addDarkSoulsArmorDetails(group, darkSoulsColors);
     addDarkSoulsWeapon(group, darkSoulsColors);
     addDarkSoulsCape(group, darkSoulsColors);
@@ -221,9 +229,14 @@ function addDarkSoulsCape(group, colors) {
 export function createDarkSoulsAnimationController(player) {
     const sword = player.group.getObjectByName('DarkSoulsSword');
     const cape = player.group.getObjectByName('DarkSoulsCape');
-    
+
     let isSwordDrawn = false;
     let drawProgress = 0;
+
+    // Audio state for footsteps
+    let lastFootstepTime = 0;
+    let lastWalkCycleTime = 0;
+    const footstepInterval = 0.4; // Seconds between footsteps (walk cycle)
 
     return {
         update: function(deltaTime, playerState) {
@@ -231,6 +244,22 @@ export function createDarkSoulsAnimationController(player) {
             if (cape && cape.update) {
                 const moveDir = playerState.isMoving ? new THREE.Vector3(1, 0, 0) : null;
                 cape.update(deltaTime, moveDir);
+            }
+
+            // Play footsteps when moving and grounded
+            if (playerState.isMoving && playerState.isGrounded && !playerState.isRolling) {
+                const now = performance.now() / 1000;
+                lastWalkCycleTime += deltaTime;
+
+                // Footstep timing based on walk cycle
+                if (lastWalkCycleTime >= footstepInterval) {
+                    // Play footstep sound synced to animation
+                    const speed = playerState.currentSpeed || 5;
+                    audioEngine.playFootstep(speed);
+                    lastWalkCycleTime = 0;
+                }
+            } else {
+                lastWalkCycleTime = 0;
             }
 
             // Handle sword drawing/ sheathing

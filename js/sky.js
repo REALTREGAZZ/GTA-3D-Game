@@ -12,12 +12,12 @@ export function createSky({ scene, sunLight, ambientLight, hdriPath = '/assets/t
     const group = new THREE.Group();
     group.name = 'Sky';
 
-    // Create gradient skydome
+    // Create gradient skydome with clear day/sunset
     const skyGeometry = new THREE.SphereGeometry(800, 32, 16);
     const skyMaterial = new THREE.ShaderMaterial({
         uniforms: {
-            topColor: { value: new THREE.Color(0xFFB347) },  // Golden amber
-            bottomColor: { value: new THREE.Color(0x4a3a6a) }, // Purple-blue
+            topColor: { value: new THREE.Color(0x4A90D9) },  // Sky blue
+            bottomColor: { value: new THREE.Color(0xFFFFFF) },  // White/light blue horizon
             offset: { value: 33 },
             exponent: { value: 0.6 },
         },
