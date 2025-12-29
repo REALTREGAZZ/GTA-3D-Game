@@ -34,8 +34,7 @@ export class SceneManager {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-        this._setupLighting();
-        this._setupFog();
+        // Lighting and fog are now handled by TerrainGenerator
 
         window.addEventListener('resize', () => this.onResize());
 
