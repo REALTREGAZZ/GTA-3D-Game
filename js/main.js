@@ -582,7 +582,7 @@ const UI = {
 // PLAYER PHYSICS SETUP
 // ============================================
 function setupPlayerPhysics() {
-    if (!Physics || !Physics.world || !Player) {
+    if (!Physics || !Player) {
         console.warn('[Init] Cannot setup player physics - Physics or Player not initialized');
         return;
     }
@@ -594,12 +594,16 @@ function setupPlayerPhysics() {
             return;
         }
 
-        // Create player collider (Kinematic Character Controller)
-        const playerBody = Physics.createPlayerCollider(Player.group);
-        
+        if (!Player?.mesh || !Player.mesh.isObject3D) {
+            console.warn('[Init] Cannot setup player physics - Player.mesh missing or invalid:', Player?.mesh);
+            return;
+        }
+
+        const playerBody = Physics.createPlayerCollider(Player.mesh);
+
         if (playerBody) {
-            Player.setPhysicsBody(playerBody);
-            Player.setPhysicsSystem(Physics);
+            Player.setPhysicsBody?.(playerBody);
+            Player.setPhysicsSystem?.(Physics);
             console.log('[Init] Player physics body created and assigned');
         } else {
             console.warn('[Init] Failed to create player physics body');
@@ -622,7 +626,13 @@ async function initPlayerAndDependentSystems() {
     // Create player with physics system reference - spawn at safe height above terrain
     const initialSpawnPos = new THREE.Vector3(0, 10, 0); // Spawn high initially, physics will settle
     Player = await createPlayerControllerV2({ position: initialSpawnPos, physicsSystem: Physics });
-    World3D.scene.add(Player.group);
+
+    if (Player?.mesh && Player.mesh.isObject3D) {
+        World3D.scene.add(Player.mesh);
+    } else {
+        console.error('[Init] Player mesh is missing/invalid, skipping scene.add:', Player);
+    }
+
     console.log('[Init] Player spawned at:', initialSpawnPos.x, initialSpawnPos.y, initialSpawnPos.z);
 
     // Setup physics for player after player is created
@@ -823,7 +833,12 @@ function initThreeWorld() {
             console.log('[Init] Terrain loaded successfully');
             terrainMesh = terrain;
             Terrain = { mesh: terrain, size: 1000 };
-            World3D.scene.add(terrain);
+
+            if (terrain?.isObject3D) {
+                World3D.scene.add(terrain);
+            } else {
+                console.warn('[Init] Loaded terrain is not a THREE.Object3D, skipping scene.add:', terrain);
+            }
 
             // Load textures for terrain
             TerrainImporterSystem.loadTexturesAndNormals(terrain);
@@ -838,7 +853,12 @@ function initThreeWorld() {
             const fallback = TerrainImporterSystem.createFallbackTerrain();
             terrainMesh = fallback;
             Terrain = { mesh: fallback, size: 1000 };
-            World3D.scene.add(fallback);
+
+            if (fallback?.isObject3D) {
+                World3D.scene.add(fallback);
+            } else {
+                console.warn('[Init] Fallback terrain is not a THREE.Object3D, skipping scene.add:', fallback);
+            }
 
             // Create collider for fallback terrain
             if (Physics && Physics.world) {
@@ -1899,7 +1919,11 @@ async function loadImportedTerrain() {
         size: Terrain?.size ?? 1000,
     };
 
-    World3D.scene.add(imported);
+    if (imported?.isObject3D) {
+        World3D.scene.add(imported);
+    } else {
+        console.warn('[Init] Imported terrain is not a THREE.Object3D, skipping scene.add:', imported);
+    }
 
     await TerrainImporterSystem.loadTexturesAndNormals(imported);
 }
@@ -1958,9 +1982,11 @@ function spawnLegendaryBosses() {
     Bosses = [malakor, sylphira, voidEater];
 
     for (const boss of Bosses) {
-        if (boss?.model) {
+        if (boss?.model && boss.model.isObject3D) {
             boss.model.position.copy(boss.position);
             World3D.scene.add(boss.model);
+        } else if (boss?.model) {
+            console.warn('[Init] Boss model is not a THREE.Object3D, skipping scene.add:', boss.model);
         }
     }
 

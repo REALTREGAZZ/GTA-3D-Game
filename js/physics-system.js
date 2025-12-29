@@ -8,6 +8,10 @@ export class PhysicsSystem {
     this.bodies = [];
     this.colliders = [];
 
+    this._terrainSource = null;
+    this._terrainBodies = [];
+    this._terrainColliders = [];
+
     this.gravity = options.gravity ?? { x: 0, y: -9.81, z: 0 };
 
     this.playerBody = null;
@@ -35,6 +39,27 @@ export class PhysicsSystem {
 
   createTerrainCollider(terrain) {
     if (!this.world || !terrain) return;
+
+    if (terrain === this._terrainSource && this._terrainColliders.length > 0) {
+      return;
+    }
+
+    // Remove previously generated terrain colliders (e.g. when swapping placeholder terrain).
+    if (this._terrainBodies.length > 0) {
+      const oldColliders = this._terrainColliders;
+      for (const body of this._terrainBodies) {
+        try {
+          this.world.removeRigidBody(body);
+        } catch {
+          // ignore
+        }
+      }
+      this.colliders = this.colliders.filter((c) => !oldColliders.includes(c));
+      this._terrainBodies = [];
+      this._terrainColliders = [];
+    }
+
+    this._terrainSource = terrain;
 
     const meshes = [];
     terrain.traverse((node) => {
@@ -78,6 +103,8 @@ export class PhysicsSystem {
       colliderDesc.setRestitution(0.0);
 
       const collider = this.world.createCollider(colliderDesc, rigidBody);
+      this._terrainBodies.push(rigidBody);
+      this._terrainColliders.push(collider);
       this.colliders.push(collider);
     }
 
@@ -86,6 +113,24 @@ export class PhysicsSystem {
 
   createPlayerCollider(playerObject) {
     if (!this.world || !playerObject) return null;
+
+    if (this.playerBody && this.playerObject === playerObject) {
+      return this.playerBody;
+    }
+
+    // Clean up previous player body/collider if we are recreating it.
+    if (this.playerBody) {
+      this.bodies = this.bodies.filter((entry) => entry?.body !== this.playerBody);
+      try {
+        this.world.removeRigidBody(this.playerBody);
+      } catch {
+        // ignore
+      }
+    }
+
+    this.playerBody = null;
+    this.playerCollider = null;
+    this.playerController = null;
 
     this.playerObject = playerObject;
 
@@ -96,13 +141,20 @@ export class PhysicsSystem {
     const PLAYER_CENTER_OFFSET_Y = CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS; // 0.9
 
     this.playerCenterOffsetY = PLAYER_CENTER_OFFSET_Y;
+    this.playerBottomOffsetY = PLAYER_CENTER_OFFSET_Y;
 
     const pos = playerObject.position;
 
-    // Create Kinematic Character Controller for precise movement control
-    // This prevents falling through terrain and allows ground check
-    const rigidBodyDesc = RAPIER.RigidBodyDesc.kinematicCharacterBased()
-      .setTranslation(pos.x, pos.y + PLAYER_CENTER_OFFSET_Y, pos.z);
+    // Rapier 0.12 (rapier3d-compat) does not support `kinematicCharacterBased()`.
+    // Use a dynamic rigid-body for the player so gravity works and the controller can set linvel.
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(pos.x, pos.y + PLAYER_CENTER_OFFSET_Y, pos.z)
+      .lockRotations()
+      .setLinearDamping(0.8)
+      .setAngularDamping(1.0)
+      .setCcdEnabled(true)
+      .setCanSleep(false);
+
     const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
     // Capsule tuned for ~1.8m tall character
@@ -115,10 +167,13 @@ export class PhysicsSystem {
     this.playerBody = rigidBody;
     this.playerCollider = collider;
 
-    // Create KinematicCharacterController for the player
-    this.playerController = RAPIER.KinematicCharacterController.new();
-    this.playerController.setOffset(0.0);
-    this.playerController.setApplyImpulsesToDynamicBodies(false);
+    // Optional: create a character controller for future use (sliding / autostep).
+    try {
+      this.playerController = this.world.createCharacterController(0.1);
+      this.playerController.setApplyImpulsesToDynamicBodies(false);
+    } catch {
+      this.playerController = null;
+    }
 
     // Track player for sync
     this.bodies.push({
@@ -127,7 +182,7 @@ export class PhysicsSystem {
       offset: { x: 0, y: -PLAYER_CENTER_OFFSET_Y, z: 0 },
     });
 
-    console.log('[PhysicsSystem] Player kinematic controller created - Capsule (halfHeight:', CAPSULE_HALF_HEIGHT, 'radius:', CAPSULE_RADIUS, ')');
+    console.log('[PhysicsSystem] Player body created - Capsule (halfHeight:', CAPSULE_HALF_HEIGHT, 'radius:', CAPSULE_RADIUS, ')');
 
     return rigidBody;
   }
@@ -138,30 +193,24 @@ export class PhysicsSystem {
    * @returns {boolean} - True if grounded
    */
   checkGround(playerPosition) {
-    if (!this.world || !this.playerCollider) return false;
+    if (!this.world || !this.playerCollider || !playerPosition) return false;
 
     const feetPos = playerPosition.clone();
 
     // Raycast down from feet with small tolerance (0.1 units = millimeter precision)
-    const rayOrigin = new RAPIER.Vector3(feetPos.x, feetPos.y, feetPos.z);
+    // Exclude the player collider so we don't detect ourselves.
+    const rayOrigin = new RAPIER.Vector3(feetPos.x, feetPos.y + 0.02, feetPos.z);
     const rayDir = new RAPIER.Vector3(0, -1, 0);
     const ray = new RAPIER.Ray(rayOrigin, rayDir);
 
-    // Raycast with max distance of 0.1 units (1mm tolerance for ground detection)
-    const maxDist = 0.1;
+    const maxDist = 0.12;
 
     try {
-      const hit = this.world.castRay(ray, maxDist, true);
-
-      if (hit) {
-        // Hit something below - we're grounded
-        return true;
-      }
+      const hit = this.world.castRay(ray, maxDist, true, undefined, undefined, this.playerCollider);
+      return !!hit;
     } catch (e) {
-      // Raycast failed, fall back to physics check
+      return false;
     }
-
-    return false;
   }
 
   /**
@@ -173,13 +222,13 @@ export class PhysicsSystem {
   getTerrainHeightAt(x, z) {
     if (!this.world) return 0;
 
-    // Cast ray from high up downward
+    // Cast ray from high up downward.
     const rayOrigin = new RAPIER.Vector3(x, 500, z);
     const rayDir = new RAPIER.Vector3(0, -1, 0);
     const ray = new RAPIER.Ray(rayOrigin, rayDir);
 
     try {
-      const hit = this.world.castRay(ray, 600, true);
+      const hit = this.world.castRay(ray, 600, true, undefined, undefined, this.playerCollider);
 
       if (hit && hit.toi !== undefined) {
         return 500 - hit.toi;

@@ -310,12 +310,12 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2,
                 // Also check if we're stuck in terrain and lift out
                 const physicsPos = state.physicsBody.translation();
                 const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
-                const CAPSULE_BOTTOM_OFFSET = 1.3;
-                const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
+                const capsuleBottomOffset = _physicsSystem?.playerBottomOffsetY ?? 1.3;
+                const bottomY = physicsPos.y - capsuleBottomOffset;
 
                 if (bottomY < groundLevel - 0.15) {
                     state.physicsBody.setTranslation(
-                        { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
+                        { x: physicsPos.x, y: groundLevel + capsuleBottomOffset + 0.05, z: physicsPos.z },
                         true
                     );
                     state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -325,14 +325,14 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2,
                 // Fallback to height-based check
                 const physicsPos = state.physicsBody.translation();
                 const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
-                const CAPSULE_BOTTOM_OFFSET = 1.3;
-                const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
+                const capsuleBottomOffset = _physicsSystem?.playerBottomOffsetY ?? 1.3;
+                const bottomY = physicsPos.y - capsuleBottomOffset;
                 state.isGrounded = bottomY <= groundLevel + 0.08 && linVel.y <= 1.0;
 
                 // If we somehow spawned inside the terrain, lift the capsule out.
                 if (bottomY < groundLevel - 0.15) {
                     state.physicsBody.setTranslation(
-                        { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
+                        { x: physicsPos.x, y: groundLevel + capsuleBottomOffset + 0.05, z: physicsPos.z },
                         true
                     );
                     state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -569,7 +569,8 @@ export async function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2,
 
         // Reset physics body if it exists
         if (state.physicsBody && _physicsSystem) {
-            state.physicsBody.setTranslation({ x: position.x, y: position.y, z: position.z }, true);
+            const centerOffsetY = _physicsSystem?.playerCenterOffsetY ?? _physicsSystem?.playerBottomOffsetY ?? 0;
+            state.physicsBody.setTranslation({ x: position.x, y: position.y + centerOffsetY, z: position.z }, true);
             state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
             state.physicsBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
             console.log('[Player] Physics body reset to:', position.x, position.y, position.z);
