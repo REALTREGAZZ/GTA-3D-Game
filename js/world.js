@@ -87,13 +87,13 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     renderer.shadowMap.enabled = GRAPHICS_CONFIG.RENDERER.SHADOWS_ENABLED;
     renderer.shadowMap.type = THREE.PCFShadowMap; // Harder shadows look better with toon
 
-    // EMERGENCY FIX #4: Increased ambient light to prevent darkness/visibility issues
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // White ambient light at 0.5 intensity
+    // EMERGENCY FIX #3: Amber directional sun + Blue ambient for volumetric appearance
+    const ambientLight = new THREE.AmbientLight(0x6BA3D4, 0.4); // Cool blue ambient fill light
     scene.add(ambientLight);
 
-    // EMERGENCY FIX #3: White directional light at 2.0 intensity for guaranteed visibility
-    const sunLight = new THREE.DirectionalLight(0xffffff, 2.0); // White sun for maximum visibility
-    sunLight.position.set(0, 100, 0); // Positioned overhead looking down
+    // Warm amber/golden sun from above-right for terrain relief and shadow definition
+    const sunLight = new THREE.DirectionalLight(0xFFB347, 1.8); // Amber/warm golden sun
+    sunLight.position.set(100, 150, 100); // Coming from above-right
     sunLight.castShadow = true;
 
     const shadowMapSize = GRAPHICS_CONFIG.RENDERER.SHADOW_MAP_SIZE;
