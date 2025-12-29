@@ -236,41 +236,6 @@ function clamp01(value) {
     return Math.max(0, Math.min(1, value));
 }
 
-function applyHitstop(intensity = 1.0) {
-    const i = clamp01(intensity);
-    const baseDuration = GAME_CONFIG.COMBAT.HITSTOP_DURATION;
-
-    const freezeDuration = baseDuration * (0.5 + 0.5 * i);
-
-    hitstopState.freezeRemaining = Math.max(hitstopState.freezeRemaining, freezeDuration);
-    hitstopState.recoveryRemaining = 0;
-    GameState.timeScale = 0;
-}
-
-function updateHitstop(rawDt) {
-    if (hitstopState.freezeRemaining > 0) {
-        hitstopState.freezeRemaining = Math.max(0, hitstopState.freezeRemaining - rawDt);
-        GameState.timeScale = 0;
-
-        if (hitstopState.freezeRemaining <= 0) {
-            hitstopState.recoveryRemaining = GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME;
-        }
-
-        return;
-    }
-
-    if (hitstopState.recoveryRemaining > 0) {
-        hitstopState.recoveryRemaining = Math.max(0, hitstopState.recoveryRemaining - rawDt);
-
-        const recoveryTime = Math.max(0.0001, GAME_CONFIG.COMBAT.HITSTOP_RECOVERY_TIME);
-        const linearT = clamp01(1 - (hitstopState.recoveryRemaining / recoveryTime));
-        GameState.timeScale = linearT * linearT;
-        return;
-    }
-
-    GameState.timeScale = 1.0;
-}
-
 function applyScreenShake(intensity = 1.0, duration = null) {
     const i = clamp01(intensity);
     const addedStrength = i * GAME_CONFIG.COMBAT.SCREEN_SHAKE_INTENSITY;
@@ -328,7 +293,6 @@ function updateScreenShake(rawDt) {
     }
 }
 
-GameState.applyHitstop = applyHitstop;
 GameState.triggerImpactFrame = triggerImpactFrame;
 GameState.applyScreenShake = applyScreenShake;
 
@@ -385,7 +349,6 @@ let DopaminePopupSystem = null;
 
 // Game Feel Overhaul Systems
 let ImpactFrameManager = null;
-let hitstopState;
 
 // Grab & Launch Entropy System
 let GrabSystem = null;
@@ -732,7 +695,7 @@ async function initPlayerAndDependentSystems() {
     ReplaySystem.setOnReplayEnd(() => {
         GameState.isReplaying = false;
         // Respawn player
-        const spawnPos = getSafeSpawnPosition(0, 0, 3);
+        const spawnPos = new THREE.Vector3(0, 5, 0);
         Player.respawn(spawnPos);
         CombatSystem.reset();
         // Reset chaos camera state
@@ -774,22 +737,6 @@ function initThreeWorld() {
 
     // Load saved graphics preset
     GraphicsState.currentPreset = getActivePreset();
-
-    // Initialize hitstop state (global)
-    hitstopState = {
-        isActive: false,
-        framesRemaining: 0,
-        timeScale: 1.0,
-        freezeRemaining: 0,
-        recoveryRemaining: 0,
-        resetToNormal: function() {
-            this.isActive = false;
-            this.framesRemaining = 0;
-            this.timeScale = 1.0;
-            this.freezeRemaining = 0;
-            this.recoveryRemaining = 0;
-        }
-    };
 
     World3D = createWorld({ canvas: UI.canvas, autoResize: true });
 
@@ -893,8 +840,8 @@ function initThreeWorld() {
     // Elite Post-Processing (Bloom + Vignette + Chromatic)
     // EMERGENCY FIX #3: Clamped bloom to prevent blinding glow bug
     PostProcessingElite = createPostProcessingElite(World3D.renderer, World3D.scene, World3D.camera, {
-        bloomStrength: 1.5,     // Max strength
-        bloomThreshold: 0.8,    // Higher threshold = less bloom (prevents blinding effect)
+        bloomStrength: 0.5,     // Reduced from 1.5 to prevent blinding effect
+        bloomThreshold: 0.95,   // Increased from 0.8 to reduce bloom trigger
         bloomRadius: 0.8,
         vignetteIntensity: 0.5,
         vignetteEnabled: true,
@@ -1068,10 +1015,7 @@ function gameLoop(currentTime) {
     updateImpactFrame(deltaTime);
     updateScreenShake(deltaTime);
 
-    hitstopState.isActive = GameState.timeScale === 0 || shouldPauseForHitstop;
-    hitstopState.timeScale = GameState.timeScale;
-
-    const finalDelta = hitstopState.isActive ? 0 : (deltaTime * hitstopState.timeScale);
+    const finalDelta = shouldPauseForHitstop ? 0 : deltaTime;
 
     if (!GameState.isPaused) {
         update(finalDelta, deltaTime);
@@ -1141,17 +1085,17 @@ function update(dt, rawDt = dt) {
 
         // EMERGENCY FIX #1: Hard position reset if player falls through terrain into void
         const playerPos = Player.getPosition();
-        if (playerPos && playerPos.y < -50) {
-            console.warn('[EMERGENCY] Player fell into void (y =', playerPos.y, ') - Resetting to spawn position (0, 10, 0)');
-            const safeSpawn = new THREE.Vector3(0, 10, 0);
+        if (playerPos && playerPos.y < -10) {
+            console.log('[Respawn] Player fell below y = -10 - Instant silent respawn to (0, 5, 0)');
+            const safeSpawn = new THREE.Vector3(0, 5, 0);
             Player.mesh.position.copy(safeSpawn);
-            
+
             // Reset physics body if it exists
             if (Physics && Physics.playerBody) {
-                Physics.playerBody.setTranslation({ x: 0, y: 10, z: 0 });
+                Physics.playerBody.setTranslation({ x: 0, y: 5, z: 0 });
                 Physics.playerBody.setLinvel({ x: 0, y: 0, z: 0 });
             }
-            
+
             // Reset player state
             if (Player.state) {
                 Player.state.velocity.set(0, 0, 0);
@@ -1646,7 +1590,7 @@ function setupInputHandlers() {
                     ReplaySystem.stopReplay();
                 }
                 GameState.isReplaying = false;
-                const spawnPos = getSafeSpawnPosition(0, 0, 3);
+                const spawnPos = new THREE.Vector3(0, 5, 0);
                 if (Player) Player.respawn(spawnPos);
                 if (CombatSystem) CombatSystem.reset();
             }

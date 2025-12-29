@@ -163,14 +163,12 @@ export function createNPCSystem(config = {}) {
                     const bCd = b.state?.collisionShakeCooldown ?? 0;
 
                     if (
-                        feedback?.applyHitstop &&
                         feedback?.applyScreenShake &&
                         aCd <= 0 &&
                         bCd <= 0 &&
                         relSpeed > threshold
                     ) {
                         const impact = Math.min(1.0, (relSpeed - threshold) / threshold);
-                        feedback.applyHitstop(0.5 + 0.5 * impact);
                         feedback.applyScreenShake(0.3 + 0.7 * impact, (GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION || 0.25) * 0.75);
 
                         a.state.collisionShakeCooldown = 0.25;

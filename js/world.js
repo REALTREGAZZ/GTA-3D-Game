@@ -91,8 +91,9 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // White ambient light at 0.5 intensity
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xFFB347, 1.0); // Golden amber sun
-    sunLight.position.set(300, 400, -300); // Epic sun position
+    // EMERGENCY FIX #3: White directional light at 2.0 intensity for guaranteed visibility
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.0); // White sun for maximum visibility
+    sunLight.position.set(0, 100, 0); // Positioned overhead looking down
     sunLight.castShadow = true;
 
     const shadowMapSize = GRAPHICS_CONFIG.RENDERER.SHADOW_MAP_SIZE;
@@ -101,7 +102,7 @@ export function createWorld({ canvas, autoResize = true } = {}) {
 
     sunLight.shadow.camera.near = 1;
     sunLight.shadow.camera.far = 500;
-    const d = 200; // Large shadow frustum for terrain
+    const d = 300; // Large shadow frustum for terrain (increased for overhead light)
     sunLight.shadow.camera.left = -d;
     sunLight.shadow.camera.right = d;
     sunLight.shadow.camera.top = d;
@@ -109,6 +110,9 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     sunLight.shadow.bias = -0.0002;
     sunLight.shadow.normalBias = 0.02;
     sunLight.shadow.radius = 2;
+
+    // Make sun light point downward
+    sunLight.target.position.set(0, 0, 0);
 
     scene.add(sunLight);
     scene.add(sunLight.target);

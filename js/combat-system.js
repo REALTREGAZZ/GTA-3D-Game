@@ -817,7 +817,6 @@ export function createCombatSystem(player, scene, camera, gameState, ui, options
                     createDamageNumber(bullet.mesh.position.clone(), bullet.damage, 'RANGED');
 
                     const shakeIntensity = Math.min(1.0, bullet.damage / 30);
-                    gameState.applyHitstop?.(0.7);
                     gameState.applyScreenShake?.(shakeIntensity, GAME_CONFIG.COMBAT.SCREEN_SHAKE_DURATION);
 
                     state.currentCombo++;
