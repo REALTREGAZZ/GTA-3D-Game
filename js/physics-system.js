@@ -83,14 +83,23 @@ export class PhysicsSystem {
 
     this.playerObject = playerObject;
 
+    // The player mesh is modeled with its origin at the feet. Rapier capsules are centered.
+    // Keep a constant offset so the capsule bottom sits at the player's feet.
+    const CAPSULE_RADIUS = 0.4;
+    const CAPSULE_HEIGHT = 1.8;
+    const CAPSULE_HALF_HEIGHT = (CAPSULE_HEIGHT / 2) - CAPSULE_RADIUS; // 0.5
+    const PLAYER_CENTER_OFFSET_Y = CAPSULE_HALF_HEIGHT + CAPSULE_RADIUS; // 0.9
+
+    this.playerCenterOffsetY = PLAYER_CENTER_OFFSET_Y;
+
     const pos = playerObject.position;
 
     // Create dynamic rigid body for player (not kinematic)
-    const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y, pos.z);
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(pos.x, pos.y + PLAYER_CENTER_OFFSET_Y, pos.z);
     const rigidBody = this.world.createRigidBody(rigidBodyDesc);
 
-    // Capsule: halfHeight=0.9, radius=0.4 -> total height 1.8
-    const colliderDesc = RAPIER.ColliderDesc.capsule(0.9, 0.4);
+    // Capsule tuned for ~1.8m tall character
+    const colliderDesc = RAPIER.ColliderDesc.capsule(CAPSULE_HALF_HEIGHT, CAPSULE_RADIUS);
     colliderDesc.setFriction(1.0);
     colliderDesc.setRestitution(0.0);
     colliderDesc.setMass(80.0); // Reasonable mass for a player character
@@ -99,15 +108,25 @@ export class PhysicsSystem {
     this.playerBody = rigidBody;
     this.playerCollider = collider;
 
+    // Track player so the physics step can drive the visual object.
+    this.bodies.push({
+      body: rigidBody,
+      object: playerObject,
+      offset: { x: 0, y: -PLAYER_CENTER_OFFSET_Y, z: 0 },
+    });
+
     // Disable automatic CCD (continuous collision detection) for better performance
     rigidBody.enableCcd(false);
 
     // Set linear damping to reduce sliding
-    rigidBody.setLinearDamping(0.8);
-    rigidBody.setAngularDamping(0.8);
+    rigidBody.setLinearDamping(6.0);
+    rigidBody.setAngularDamping(1.0);
 
     // Lock rotation to prevent player from tipping over
     rigidBody.setEnabledRotations(false, false, false);
+
+    console.log('[PhysicsSystem] Player collider created - Capsule (halfHeight:', CAPSULE_HALF_HEIGHT, 'radius:', CAPSULE_RADIUS, ') at center Y:', pos.y + PLAYER_CENTER_OFFSET_Y);
+    console.log('[PhysicsSystem] Linear damping:', 6.0, ', Rotations locked: true');
 
     return rigidBody;
   }
@@ -121,20 +140,25 @@ export class PhysicsSystem {
   update(deltaTime) {
     if (!this.world) return;
 
-    // Keep player collider aligned to visual controller.
-    this.syncPlayerKinematic();
+    // DO NOT sync player kinematic - player body is DYNAMIC, not kinematic
+    // Player controller will apply forces/velocities directly to the physics body
 
     this.world.timestep = deltaTime;
     this.world.step();
 
     // Sync any tracked dynamic bodies to their Three meshes.
     for (const entry of this.bodies) {
-      const { body, object } = entry;
+      const { body, object, offset } = entry;
       if (!body || !object) continue;
 
       const t = body.translation();
       const r = body.rotation();
-      object.position.set(t.x, t.y, t.z);
+
+      if (offset) {
+        object.position.set(t.x + offset.x, t.y + offset.y, t.z + offset.z);
+      } else {
+        object.position.set(t.x, t.y, t.z);
+      }
       object.quaternion.set(r.x, r.y, r.z, r.w);
     }
   }

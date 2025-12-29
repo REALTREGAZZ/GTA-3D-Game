@@ -50,6 +50,9 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
     const originalArmMaterial = materials.arm.clone();
     const originalLegMaterial = materials.leg.clone();
 
+    // Store physics system reference (important!)
+    let _physicsSystem = physicsSystem;
+
     // Player state
     const state = {
         velocity: new THREE.Vector3(),
@@ -85,6 +88,8 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
         // Physics state
         physicsBody: null,
         physicsCollider: null,
+
+        _debugLastLog: 0,
     };
 
     const ROLL_DURATION = 0.35;
@@ -268,56 +273,83 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
         }
 
         // Apply movement using physics
-        if (state.physicsBody && physicsSystem && physicsSystem.world) {
-            // Clear previous forces
-            state.physicsBody.resetForces(true);
-            state.physicsBody.resetTorques(true);
+        if (state.physicsBody && _physicsSystem && _physicsSystem.world) {
+            const now = Date.now();
+            const wantsMove = !!(
+                inputKeys.KeyW || inputKeys.KeyA || inputKeys.KeyS || inputKeys.KeyD ||
+                inputKeys.ArrowUp || inputKeys.ArrowLeft || inputKeys.ArrowDown || inputKeys.ArrowRight
+            );
 
-            // Apply gravity
-            const gravity = physicsSystem.world.gravity();
-            state.physicsBody.addForce({ x: gravity.x * state.physicsBody.mass(), y: gravity.y * state.physicsBody.mass(), z: gravity.z * state.physicsBody.mass() }, true);
+            // Read current velocity
+            const linVel = state.physicsBody.linvel();
 
-            // Apply movement force
-            if (state.isRolling) {
-                physicsMovementForce.copy(state.rollDirection).multiplyScalar(ROLL_SPEED);
-                state.physicsBody.addForce({ x: physicsMovementForce.x, y: 0, z: physicsMovementForce.z }, true);
-            } else if (state.currentSpeed > 0 && state.isMoving) {
-                physicsMovementForce.copy(moveDirection).multiplyScalar(state.currentSpeed * 10); // Scale force for better feel
-                state.physicsBody.addForce({ x: physicsMovementForce.x, y: 0, z: physicsMovementForce.z }, true);
+            // Target horizontal velocity (immediate and responsive)
+            const targetSpeed = state.isRolling
+                ? ROLL_SPEED
+                : (state.isMoving ? state.currentSpeed : 0);
+
+            const dirX = state.isRolling ? state.rollDirection.x : (state.isMoving ? moveDirection.x : 0);
+            const dirZ = state.isRolling ? state.rollDirection.z : (state.isMoving ? moveDirection.z : 0);
+
+            const targetVx = dirX * targetSpeed;
+            const targetVz = dirZ * targetSpeed;
+
+            // Smooth acceleration (but still snappy)
+            const accel = state.isRolling ? 45 : (state.isMoving ? 30 : 35);
+            const t = 1 - Math.exp(-accel * deltaTime);
+
+            const nextVx = linVel.x + (targetVx - linVel.x) * t;
+            const nextVz = linVel.z + (targetVz - linVel.z) * t;
+
+            state.physicsBody.setLinvel({ x: nextVx, y: linVel.y, z: nextVz }, true);
+
+            // Ground check using capsule bottom (Rapier body is capsule center)
+            const physicsPos = state.physicsBody.translation();
+            const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
+            const CAPSULE_BOTTOM_OFFSET = 1.3; // halfHeight 0.9 + radius 0.4
+            const bottomY = physicsPos.y - CAPSULE_BOTTOM_OFFSET;
+
+            state.isGrounded = bottomY <= groundLevel + 0.08 && linVel.y <= 1.0;
+
+            // If we somehow spawned inside the terrain, lift the capsule out.
+            if (bottomY < groundLevel - 0.15) {
+                state.physicsBody.setTranslation(
+                    { x: physicsPos.x, y: groundLevel + CAPSULE_BOTTOM_OFFSET + 0.05, z: physicsPos.z },
+                    true
+                );
+                state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
+                state.isGrounded = true;
             }
 
-            // Apply jump force
+            // Jump: set vertical velocity (do not move mesh directly)
             if (inputKeys.Space && state.isGrounded && state.jumpCooldown <= 0) {
-                state.physicsBody.addForce({ x: 0, y: GAME_CONFIG.PLAYER.JUMP_FORCE * state.physicsBody.mass(), z: 0 }, true);
+                const jumpVel = Math.max(7.0, Math.min(11.0, GAME_CONFIG.PLAYER.JUMP_FORCE * 0.6));
+                state.physicsBody.setLinvel({ x: nextVx, y: jumpVel, z: nextVz }, true);
                 state.isGrounded = false;
                 state.jumpCooldown = GAME_CONFIG.PLAYER.JUMP_COOLDOWN;
+                console.log('[PlayerInput] Space pressed, applying jump linvel:', jumpVel);
             }
 
-            // Update jump cooldown
             if (state.jumpCooldown > 0) {
                 state.jumpCooldown -= deltaTime;
             }
 
-            // Sync visual position with physics body
-            if (state.physicsBody) {
-                const physicsPos = state.physicsBody.translation();
-                group.position.set(physicsPos.x, physicsPos.y, physicsPos.z);
-
-                // Check if grounded (simple raycast down)
-                const rayOrigin = new THREE.Vector3(physicsPos.x, physicsPos.y + 0.1, physicsPos.z);
-                const rayDirection = new THREE.Vector3(0, -1, 0);
-                const rayLength = 0.2;
-
-                // Simple ground check using terrain height
-                const groundLevel = getGroundY(physicsPos.x, physicsPos.z);
-                state.isGrounded = physicsPos.y <= groundLevel + 0.2 && physicsPos.y >= groundLevel - 0.1;
-
-                if (state.isGrounded && state.velocity.y < 0) {
-                    // Small upward force to prevent sticking
-                    state.physicsBody.setLinvel({ x: state.physicsBody.linvel().x, y: 0.1, z: state.physicsBody.linvel().z }, true);
-                }
+            // Debug: confirm input is mapped and velocity is applied
+            if (wantsMove && now - state._debugLastLog > 250) {
+                console.log('[PlayerInput] WASD pressed, setting linvel:', {
+                    vx: nextVx.toFixed(2),
+                    vz: nextVz.toFixed(2),
+                    grounded: state.isGrounded,
+                    physicsPos: `${physicsPos.x.toFixed(1)},${physicsPos.y.toFixed(1)},${physicsPos.z.toFixed(1)}`,
+                });
+                state._debugLastLog = now;
             }
         } else {
+            const now = Date.now();
+            if (now - state._debugLastLog > 1000) {
+                console.log('[Player] Using fallback non-physics movement (physicsBody:', !!state.physicsBody, '_physicsSystem:', !!_physicsSystem, 'world:', !!(_physicsSystem?.world), ')');
+                state._debugLastLog = now;
+            }
             // Fallback to non-physics movement if physics not available
             _movement.set(0, 0, 0);
             if (state.isRolling) {
@@ -417,6 +449,12 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
 
     function setPhysicsBody(body) {
         state.physicsBody = body;
+        console.log('[Player] Physics body set:', !!body);
+    }
+
+    function setPhysicsSystem(physicsSystem) {
+        _physicsSystem = physicsSystem;
+        console.log('[Player] Physics system set:', !!physicsSystem);
     }
 
     function getPosition() {
@@ -511,10 +549,11 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
         group.rotation.set(0, 0, 0);
 
         // Reset physics body if it exists
-        if (state.physicsBody && physicsSystem) {
+        if (state.physicsBody && _physicsSystem) {
             state.physicsBody.setTranslation({ x: position.x, y: position.y, z: position.z }, true);
             state.physicsBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
             state.physicsBody.setAngvel({ x: 0, y: 0, z: 0 }, true);
+            console.log('[Player] Physics body reset to:', position.x, position.y, position.z);
         }
     }
 
@@ -561,6 +600,7 @@ export function createDarkSoulsPlayer({ position = new THREE.Vector3(0, 2, 0), p
         getHealth,
         setColliders,
         setPhysicsBody,
+        setPhysicsSystem,
         performAttack
     };
 }
