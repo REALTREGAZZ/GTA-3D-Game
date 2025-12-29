@@ -111,6 +111,38 @@ export class PhysicsSystem {
     console.log('[PhysicsSystem] Terrain colliders created:', meshes.length);
   }
 
+  /**
+   * EMERGENCY FIX #2: Create a massive static box collider as safety ground plane
+   * This prevents player from falling through terrain into infinite void
+   */
+  createGroundPlane(size = 2000, yPosition = -1) {
+    if (!this.world) return;
+
+    console.log('[PhysicsSystem] Creating emergency ground plane collider at y =', yPosition);
+
+    // Create static rigid body for ground plane
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+      .setTranslation(0, yPosition, 0);
+
+    const rigidBody = this.world.createRigidBody(rigidBodyDesc);
+
+    // Create large box collider (size x 2 height x size)
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(size / 2, 1, size / 2);
+    colliderDesc.setFriction(1.0);
+    colliderDesc.setRestitution(0.0);
+
+    const collider = this.world.createCollider(colliderDesc, rigidBody);
+    
+    // Track it separately from terrain colliders
+    if (!this._groundPlaneBody) {
+      this._groundPlaneBody = rigidBody;
+      this._groundPlaneCollider = collider;
+      this.colliders.push(collider);
+    }
+
+    console.log('[PhysicsSystem] Emergency ground plane created: size =', size, 'x', size, 'at y =', yPosition);
+  }
+
   createPlayerCollider(playerObject) {
     if (!this.world || !playerObject) return null;
 
