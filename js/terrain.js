@@ -115,20 +115,22 @@ export function createTerrain({
         texture.repeat.set(repeat, repeat);
     }
 
+    // Enhanced material for better visibility and natural appearance
     const material = new THREE.MeshStandardMaterial({
-        color: 0x1a1a2e,
+        color: 0x3D8C40,  // Grass green base (more visible than dark purple)
         map: texture || null,
-        emissive: 0x00ccff,
+        emissive: 0x003311,  // Subtle green glow (less than before)
         emissiveMap: texture || null,
-        emissiveIntensity: 0.25,
-        roughness: 0.7,
-        metalness: 0.3,
+        emissiveIntensity: 0.1,  // Reduced from 0.25 for more natural look
+        roughness: 0.8,  // Less shiny, more natural
+        metalness: 0.0,  // Not metallic
         side: THREE.DoubleSide,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'Terrain';
-    mesh.receiveShadow = true;
+    mesh.castShadow = true;   // Terrain casts shadows
+    mesh.receiveShadow = true;  // Terrain receives shadows
 
     // Fast analytical height sampling (avoids per-frame raycasts).
     // World space: after rotateX(-PI/2), original plane Y becomes -world Z.
