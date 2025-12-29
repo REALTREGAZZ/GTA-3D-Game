@@ -85,7 +85,7 @@ export class PlayerController {
             this.velocity.y -= this.gravity * deltaTime;
         }
 
-        const groundY = terrain ? terrain.getHeightAt(this.player.getPosition().x, this.player.getPosition().z) : 0;
+        const groundY = terrain ? terrain.groundY : 0;
         const playerY = this.player.getPosition().y;
         const capsuleBottom = playerY;
         

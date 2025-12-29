@@ -10,7 +10,7 @@ import { InputManager } from './InputManager.js';
 import { SceneManager } from './SceneManager.js';
 import { PhysicsManager } from './PhysicsManager.js';
 import { AudioManager } from './AudioManager.js';
-import { TerrainGenerator } from './TerrainGenerator.js';
+import { createTerrain } from './TerrainGenerator.js';
 import { Player } from './Player.js';
 import { PlayerController } from './PlayerController.js';
 
@@ -27,7 +27,6 @@ let sceneManager = null;
 let inputManager = null;
 let physicsManager = null;
 let audioManager = null;
-let terrainGenerator = null;
 let player = null;
 let playerController = null;
 
@@ -63,7 +62,6 @@ async function init() {
 
     physicsManager = new PhysicsManager();
     await physicsManager.init();
-    physicsManager.createGroundPlane(200);
     physicsManager.createPlayerCapsule();
     console.log('[Main] PhysicsManager initialized');
 
@@ -71,9 +69,8 @@ async function init() {
     await audioManager.init();
     console.log('[Main] AudioManager initialized');
 
-    terrainGenerator = new TerrainGenerator();
-    const terrain = terrainGenerator.generate();
-    sceneManager.scene.add(terrain);
+    const terrain = createTerrain(sceneManager.scene, physicsManager.getWorld());
+    sceneManager.scene.add(terrain.mesh);
     console.log('[Main] TerrainGenerator initialized');
 
     player = new Player();
@@ -116,7 +113,7 @@ function update(deltaTime) {
     if (GameState.isPaused) return;
 
     inputManager.update(deltaTime);
-    playerController.update(deltaTime, terrainGenerator);
+    playerController.update(deltaTime, terrain);
     physicsManager.update(deltaTime);
     audioManager.update(deltaTime);
 
