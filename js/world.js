@@ -87,7 +87,8 @@ export function createWorld({ canvas, autoResize = true } = {}) {
     renderer.shadowMap.enabled = GRAPHICS_CONFIG.RENDERER.SHADOWS_ENABLED;
     renderer.shadowMap.type = THREE.PCFShadowMap; // Harder shadows look better with toon
 
-    const ambientLight = new THREE.AmbientLight(0x6699CC, 0.4); // Blue soft ambient light
+    // EMERGENCY FIX #4: Increased ambient light to prevent darkness/visibility issues
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // White ambient light at 0.5 intensity
     scene.add(ambientLight);
 
     const sunLight = new THREE.DirectionalLight(0xFFB347, 1.0); // Golden amber sun

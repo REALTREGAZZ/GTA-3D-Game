@@ -891,10 +891,10 @@ function initThreeWorld() {
     ScreenShakeManager = createScreenShakeSystem(World3D.camera);
 
     // Elite Post-Processing (Bloom + Vignette + Chromatic)
-    // Epic bloom: strength 1.5, radius 0.8, threshold 0.2 - UI and magic will glow!
+    // EMERGENCY FIX #3: Clamped bloom to prevent blinding glow bug
     PostProcessingElite = createPostProcessingElite(World3D.renderer, World3D.scene, World3D.camera, {
-        bloomStrength: 1.5,
-        bloomThreshold: 0.2,
+        bloomStrength: 1.5,     // Max strength
+        bloomThreshold: 0.8,    // Higher threshold = less bloom (prevents blinding effect)
         bloomRadius: 0.8,
         vignetteIntensity: 0.5,
         vignetteEnabled: true,
@@ -1138,6 +1138,26 @@ function update(dt, rawDt = dt) {
 
         Player.setColliders(allColliders);
         Player.update(finalDt, Keys, allColliders, getTerrainHeightAt, PlayerCamera.state.horizontalAngle);
+
+        // EMERGENCY FIX #1: Hard position reset if player falls through terrain into void
+        const playerPos = Player.getPosition();
+        if (playerPos && playerPos.y < -50) {
+            console.warn('[EMERGENCY] Player fell into void (y =', playerPos.y, ') - Resetting to spawn position (0, 10, 0)');
+            const safeSpawn = new THREE.Vector3(0, 10, 0);
+            Player.mesh.position.copy(safeSpawn);
+            
+            // Reset physics body if it exists
+            if (Physics && Physics.playerBody) {
+                Physics.playerBody.setTranslation({ x: 0, y: 10, z: 0 });
+                Physics.playerBody.setLinvel({ x: 0, y: 0, z: 0 });
+            }
+            
+            // Reset player state
+            if (Player.state) {
+                Player.state.velocity.set(0, 0, 0);
+                Player.state.velocityY = 0;
+            }
+        }
 
         // Step physics immediately after applying player input so camera/UI
         // and any gameplay systems see the latest rigidbody positions this frame.
@@ -1932,6 +1952,9 @@ async function initLegendaryPhysics() {
     if (!Physics || !Terrain?.mesh) return;
 
     await Physics.ready;
+
+    // EMERGENCY FIX #2: Create safety ground plane FIRST (prevents falling through terrain)
+    Physics.createGroundPlane(2000, -1);
 
     Physics.createTerrainCollider(Terrain.mesh);
     if (Player?.mesh) {

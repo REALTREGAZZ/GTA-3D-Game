@@ -13,10 +13,11 @@ import { DOPAMINE_CONFIG } from './config.js';
 
 export const POST_PROCESSING_CONFIG = {
     // Bloom settings - Epic glow for powers and UI
+    // EMERGENCY FIX #3: Clamped bloom to prevent blinding glow bug in void
     BLOOM: {
-        strength: 1.5,
+        strength: 1.5,        // Max strength (was causing self-amplifying glow)
         radius: 0.8,
-        threshold: 0.2,
+        threshold: 0.8,       // Higher threshold = less bloom (was 0.2, now 0.8)
     },
 
     // Vignette settings
